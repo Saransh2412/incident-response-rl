@@ -11,7 +11,7 @@ from .models import Action, BaselineEpisodeResult, BaselineRunReport, Observatio
 
 DEFAULT_API_BASE_URL = "https://router.huggingface.co/v1"
 DEFAULT_MODEL_NAME = "openai/gpt-oss-20b"
-DEFAULT_ENV_BASE_URL = "http://127.0.0.1:8000"
+DEFAULT_ENV_BASE_URL = "http://127.0.0.1:7860"
 DEFAULT_SCENARIOS = [
     "high_latency_easy",
     "service_crash_medium",

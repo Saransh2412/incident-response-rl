@@ -5,7 +5,7 @@ colorFrom: red
 colorTo: blue
 sdk: docker
 pinned: false
-app_port: 8000
+app_port: 7860
 base_path: /web
 tags:
   - openenv
@@ -103,7 +103,7 @@ Required environment variables for the baseline runner:
 HF_TOKEN=...
 API_BASE_URL=https://router.huggingface.co/v1
 MODEL_NAME=openai/gpt-oss-20b
-ENV_BASE_URL=http://127.0.0.1:8000
+ENV_BASE_URL=http://127.0.0.1:7860
 ```
 
 ## Local Usage
@@ -117,7 +117,7 @@ python -m pytest
 Run the OpenEnv server:
 
 ```bash
-python -m uvicorn server.app:app --host 0.0.0.0 --port 8000
+python -m uvicorn server.app:app --host 0.0.0.0 --port 7860
 ```
 
 Validate the environment:
@@ -174,13 +174,13 @@ docker build -t incident-response-rl:latest .
 Run:
 
 ```bash
-docker run --rm -p 8000:8000 incident-response-rl:latest
+docker run --rm -p 7860:7860 incident-response-rl:latest
 ```
 
 Then validate the running service:
 
 ```bash
-openenv validate --url http://127.0.0.1:8000
+openenv validate --url http://127.0.0.1:7860
 ```
 
 ## Hugging Face Spaces Deployment

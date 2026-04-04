@@ -27,12 +27,12 @@ def main() -> None:
     )
     print("API step:", step_response.json())
 
-    config = uvicorn.Config(app, host="127.0.0.1", port=8000, log_level="error")
+    config = uvicorn.Config(app, host="127.0.0.1", port=7860, log_level="error")
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
     time.sleep(1.0)
-    print("Remote validation target ready at http://127.0.0.1:8000")
+    print("Remote validation target ready at http://127.0.0.1:7860")
     server.should_exit = True
     thread.join(timeout=5)
 

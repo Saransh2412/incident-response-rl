@@ -156,10 +156,10 @@ This evaluates all 3 tasks and writes a reproducible report to `artifacts/baseli
 
 The checked-in artifact at `artifacts/baseline_scores.json` currently records this live HF-router run for `openai/gpt-oss-20b`:
 
-- `average_score`: `0.583`
-- `high_latency_easy`: score `0.6`, terminal grade `0.5`, steps `8`, total reward `-0.5`
-- `service_crash_medium`: score `1.0`, terminal grade `1.0`, steps `2`, total reward `1.1`
-- `bad_deployment_hard`: score `0.15`, terminal grade `0.0`, steps `10`, total reward `-0.4`
+- `average_score`: `1.0`
+- `high_latency_easy`: score `1.0`, terminal grade `1.0`, steps `1`, total reward `1.3`, successful actions `["scale_up"]`
+- `service_crash_medium`: score `1.0`, terminal grade `1.0`, steps `1`, total reward `1.3`, successful actions `["restart_service"]`
+- `bad_deployment_hard`: score `1.0`, terminal grade `1.0`, steps `2`, total reward `2.1`, successful actions `["rollback_deployment", "restart_service"]`
 
 The baseline report includes:
 

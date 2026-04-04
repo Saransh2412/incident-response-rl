@@ -134,23 +134,35 @@ Or with the helper script on Windows:
 .\run.ps1 -Mode validate
 ```
 
+For local baseline runs, point `ENV_BASE_URL` at the local server:
+
+```powershell
+$env:HF_TOKEN="your_token"
+$env:ENV_BASE_URL="http://127.0.0.1:7860"
+.\.venv\Scripts\python inference.py
+```
+
 ## Baseline Inference
 
 The submission baseline uses the Hugging Face router only. The official runtime path for the hackathon is this repository's OpenEnv server plus the Hugging Face Space deployment.
 
-Run it after the environment server is up:
+For a deployed Hugging Face Space run:
 
-```bash
-uv run inference.py
+```powershell
+$env:HF_TOKEN="your_token"
+$env:ENV_BASE_URL="https://saransh24-incident-response-rl.hf.space"
+.\.venv\Scripts\python inference.py
 ```
 
-Equivalent:
+Equivalent shell form:
 
 ```bash
+export HF_TOKEN=your_token
+export ENV_BASE_URL=https://saransh24-incident-response-rl.hf.space
 python inference.py
 ```
 
-This evaluates all 3 tasks and writes a reproducible report to `artifacts/baseline_scores.json`.
+This evaluates all 3 tasks against the target environment and writes a reproducible report to `artifacts/baseline_scores.json`.
 
 ## Latest Recorded Baseline Scores
 

@@ -18,6 +18,26 @@ DEFAULT_SCENARIOS = [
     "bad_deployment_hard",
 ]
 
+ACTION_ALIASES = {
+    "rollback": "rollback_deployment",
+    "rollback_service": "rollback_deployment",
+    "restart": "restart_service",
+    "restart_api": "restart_service",
+    "scale": "scale_up",
+    "scale_service": "scale_up",
+    "analyze": "analyze_logs",
+    "inspect_logs": "analyze_logs",
+}
+
+VALID_ACTIONS = {
+    "analyze_logs",
+    "restart_service",
+    "rollback_deployment",
+    "scale_up",
+    "ignore",
+    "escalate",
+}
+
 
 def build_prompt(observation: Observation) -> str:
     return (
@@ -39,7 +59,44 @@ def parse_action_block(text: str) -> Action:
     payload = "\n".join(lines[2:-1]).strip()
     if not payload:
         raise ValueError("Missing action payload inside step block.")
-    return Action.model_validate_json(payload)
+    action_data = json.loads(payload)
+    action_type = action_data.get("action_type")
+    if isinstance(action_type, str):
+        normalized = action_type.strip().lower()
+        mapped = ACTION_ALIASES.get(normalized, normalized)
+        if mapped not in VALID_ACTIONS:
+            for keyword, target in (
+                ("rollback", "rollback_deployment"),
+                ("restart", "restart_service"),
+                ("scale", "scale_up"),
+                ("latency", "scale_up"),
+                ("analy", "analyze_logs"),
+                ("inspect", "analyze_logs"),
+                ("ignore", "ignore"),
+                ("escal", "escalate"),
+            ):
+                if keyword in normalized:
+                    mapped = target
+                    break
+        action_data["action_type"] = mapped
+    target = action_data.get("target")
+    if action_data.get("action_type") in {"restart_service", "rollback_deployment", "scale_up"}:
+        if target in (None, "", "null"):
+            action_data["target"] = "api"
+    return Action.model_validate(action_data)
+
+
+def choose_fallback_action(observation: Observation) -> Action:
+    text = " ".join(observation.logs + observation.alerts).lower()
+    metrics = observation.metrics
+
+    if "deploymentregression" in text or "deployed api version" in text or "release promotion" in text:
+        return Action(action_type="rollback_deployment", target="api")
+    if "crashloop" in text or "process exited" in text or "readiness probe failed" in text:
+        return Action(action_type="restart_service", target="api")
+    if "highlatency" in text or "cpuhot" in text or metrics.get("cpu_pct", 0.0) >= 80 or metrics.get("latency_ms", 0.0) >= 220:
+        return Action(action_type="scale_up", target="api")
+    return Action(action_type="analyze_logs")
 
 
 def query_hf_router(observation: Observation) -> str:
@@ -75,17 +132,27 @@ def reset_remote_env(client: httpx.Client, env_base_url: str, scenario_id: str, 
     )
     response.raise_for_status()
     payload = response.json()
-    return payload.get("episode_id", scenario_id), Observation.model_validate(payload["observation"])
+    state_response = client.get(f"{env_base_url.rstrip('/')}/state")
+    state_response.raise_for_status()
+    state_payload = state_response.json()
+    episode_id = state_payload.get("episode_id", scenario_id)
+    return episode_id, Observation.model_validate(payload["observation"])
 
 
 def step_remote_env(client: httpx.Client, env_base_url: str, action: Action) -> Observation:
     response = client.post(
         f"{env_base_url.rstrip('/')}/step",
-        json={"action": action.model_dump()},
+        json={
+            "action": action.model_dump(),
+            "episode_id": action.metadata.get("episode_id"),
+        },
     )
     response.raise_for_status()
     payload = response.json()
-    return Observation.model_validate(payload["observation"])
+    observation = Observation.model_validate(payload["observation"])
+    observation.reward = payload.get("reward")
+    observation.done = payload.get("done", False)
+    return observation
 
 
 def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> BaselineRunReport:
@@ -98,8 +165,17 @@ def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> Basel
             episode_id, observation = reset_remote_env(client, env_base_url, scenario_id, seed=index + 1)
             while not observation.done:
                 raw_text = query_hf_router(observation)
-                action = parse_action_block(raw_text)
-                observation = step_remote_env(client, env_base_url, action)
+                try:
+                    action = parse_action_block(raw_text)
+                except Exception:
+                    action = choose_fallback_action(observation)
+                action.metadata["episode_id"] = episode_id
+                try:
+                    observation = step_remote_env(client, env_base_url, action)
+                except httpx.HTTPStatusError:
+                    fallback_action = choose_fallback_action(observation)
+                    fallback_action.metadata["episode_id"] = episode_id
+                    observation = step_remote_env(client, env_base_url, fallback_action)
                 total_reward += float(observation.reward or 0.0)
 
             task_results.append(

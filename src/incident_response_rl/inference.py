@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 import httpx
+from openai import OpenAI
 
 from .models import Action, BaselineEpisodeResult, BaselineRunReport, Observation
 
@@ -42,6 +43,7 @@ REMEDIAL_ACTIONS = {
     "rollback_deployment",
     "scale_up",
 }
+RUN_NAME = "incident-response-rl"
 
 
 def build_prompt(observation: Observation) -> str:
@@ -156,30 +158,74 @@ def extract_successful_actions(observation: Observation) -> list[str]:
     return []
 
 
-def query_hf_router(observation: Observation) -> str:
+def log_start(env_base_url: str, scenarios: list[str]) -> None:
+    print("[START]", flush=True)
+    print(
+        json.dumps(
+            {
+                "env": RUN_NAME,
+                "target": env_base_url,
+                "model": os.environ.get("MODEL_NAME", DEFAULT_MODEL_NAME),
+                "scenarios": scenarios,
+            }
+        ),
+        flush=True,
+    )
+
+
+def log_step(scenario_id: str, step: int, action: Action, reward: float, done: bool, score: float) -> None:
+    print("[STEP]", flush=True)
+    print(
+        json.dumps(
+            {
+                "scenario_id": scenario_id,
+                "step": step,
+                "action_type": action.action_type,
+                "target": action.target,
+                "reward": reward,
+                "done": done,
+                "score": score,
+            }
+        ),
+        flush=True,
+    )
+
+
+def log_end(report: BaselineRunReport) -> None:
+    print("[END]", flush=True)
+    print(
+        json.dumps(
+            {
+                "env": RUN_NAME,
+                "model": report.model_name,
+                "average_score": report.average_score,
+                "task_scores": [item.model_dump() for item in report.task_scores],
+            }
+        ),
+        flush=True,
+    )
+
+
+def create_llm_client() -> OpenAI:
     token = os.environ.get("HF_TOKEN")
     if not token:
         raise RuntimeError("HF_TOKEN is required to call the HF router.")
     api_base = os.environ.get("API_BASE_URL", DEFAULT_API_BASE_URL).rstrip("/")
+    return OpenAI(base_url=api_base, api_key=token)
+
+
+def query_hf_router(client: OpenAI, observation: Observation) -> str:
     model_name = os.environ.get("MODEL_NAME", DEFAULT_MODEL_NAME)
-    body = {
-        "model": model_name,
-        "messages": [{"role": "user", "content": build_prompt(observation)}],
-        "temperature": 0,
-        "seed": 7,
-    }
-    with httpx.Client(timeout=60.0) as client:
-        response = client.post(
-            f"{api_base}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-            },
-            json=body,
-        )
-        response.raise_for_status()
-    payload = response.json()
-    return payload["choices"][0]["message"]["content"]
+    completion = client.chat.completions.create(
+        model=model_name,
+        messages=[{"role": "user", "content": build_prompt(observation)}],
+        temperature=0,
+        max_tokens=200,
+        stream=False,
+        extra_body={"seed": 7},
+    )
+    text = completion.choices[0].message.content or ""
+    return text.strip()
 
 
 def reset_remote_env(client: httpx.Client, env_base_url: str, scenario_id: str, seed: int) -> tuple[str, Observation]:
@@ -215,6 +261,8 @@ def step_remote_env(client: httpx.Client, env_base_url: str, action: Action) -> 
 def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> BaselineRunReport:
     scenarios = scenarios or list(DEFAULT_SCENARIOS)
     task_results: list[BaselineEpisodeResult] = []
+    llm_client = create_llm_client()
+    log_start(env_base_url, scenarios)
 
     with httpx.Client(timeout=30.0) as client:
         for index, scenario_id in enumerate(scenarios):
@@ -222,7 +270,7 @@ def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> Basel
             successful_actions: list[str] = []
             episode_id, observation = reset_remote_env(client, env_base_url, scenario_id, seed=index + 1)
             while not observation.done:
-                raw_text = query_hf_router(observation)
+                raw_text = query_hf_router(llm_client, observation)
                 previous_score = observation.task_score
                 action = resolve_action(observation, raw_text)
                 action.metadata["episode_id"] = episode_id
@@ -243,6 +291,14 @@ def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> Basel
                 ):
                     successful_actions = list(dict.fromkeys([*successful_actions, action.action_type]))
                 total_reward += float(next_observation.reward or 0.0)
+                log_step(
+                    scenario_id=scenario_id,
+                    step=next_observation.step_count,
+                    action=action,
+                    reward=float(next_observation.reward or 0.0),
+                    done=bool(next_observation.done),
+                    score=float(next_observation.task_score),
+                )
                 observation = next_observation
 
             task_results.append(
@@ -258,12 +314,14 @@ def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> Basel
             )
 
     average_score = round(sum(item.score for item in task_results) / len(task_results), 3)
-    return BaselineRunReport(
+    report = BaselineRunReport(
         model_name=os.environ.get("MODEL_NAME", DEFAULT_MODEL_NAME),
         router_base_url=os.environ.get("API_BASE_URL", DEFAULT_API_BASE_URL),
         average_score=average_score,
         task_scores=task_results,
     )
+    log_end(report)
+    return report
 
 
 def main() -> None:
@@ -276,7 +334,6 @@ def main() -> None:
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(report.model_dump_json(indent=2), encoding="utf-8")
-    print(report.model_dump_json(indent=2))
 
 
 if __name__ == "__main__":

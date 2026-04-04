@@ -106,6 +106,8 @@ MODEL_NAME=openai/gpt-oss-20b
 ENV_BASE_URL=http://127.0.0.1:7860
 ```
 
+The submission baseline uses the OpenAI Python client pointed at `API_BASE_URL` and authenticated with `HF_TOKEN`.
+
 ## Local Usage
 
 Run tests:
@@ -144,7 +146,13 @@ $env:ENV_BASE_URL="http://127.0.0.1:7860"
 
 ## Baseline Inference
 
-The submission baseline uses the Hugging Face router only. The official runtime path for the hackathon is this repository's OpenEnv server plus the Hugging Face Space deployment.
+The submission inference script is the root [`inference.py`](/D:/RL/inference.py). It uses the OpenAI Python client with:
+
+- `base_url=API_BASE_URL`
+- `api_key=HF_TOKEN`
+- `model=MODEL_NAME`
+
+The official hackathon runtime path is the Hugging Face router plus the deployed OpenEnv environment.
 
 For a deployed Hugging Face Space run:
 
@@ -163,6 +171,12 @@ python inference.py
 ```
 
 This evaluates all 3 tasks against the target environment and writes a reproducible report to `artifacts/baseline_scores.json`.
+
+The script emits structured stdout logs in this order:
+
+- `[START]` once at the beginning
+- `[STEP]` once per environment step
+- `[END]` once with the final run summary
 
 ## Latest Recorded Baseline Scores
 

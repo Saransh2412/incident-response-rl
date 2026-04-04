@@ -1,14 +1,20 @@
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from incident_response_rl.inference import (
     choose_fallback_action,
     choose_runbook_action,
+    create_llm_client,
     extract_successful_actions,
+    log_end,
+    log_start,
+    log_step,
     parse_action_block,
+    query_hf_router,
     resolve_action,
     run_baseline,
 )
-from incident_response_rl.models import Observation
+from incident_response_rl.models import Action, BaselineEpisodeResult, BaselineRunReport, Observation
 
 
 def test_parse_action_block_accepts_strict_format() -> None:
@@ -115,8 +121,92 @@ def test_extract_successful_actions_reads_nested_info() -> None:
     assert extract_successful_actions(observation) == ["restart_service"]
 
 
+def test_create_llm_client_uses_hf_router_env() -> None:
+    with patch.dict(
+        "os.environ",
+        {
+            "HF_TOKEN": "hf_test_token",
+            "API_BASE_URL": "https://router.huggingface.co/v1",
+        },
+        clear=False,
+    ), patch("incident_response_rl.inference.OpenAI") as openai_cls:
+        create_llm_client()
+
+    openai_cls.assert_called_once_with(
+        base_url="https://router.huggingface.co/v1",
+        api_key="hf_test_token",
+    )
+
+
+def test_query_hf_router_uses_openai_client_shape() -> None:
+    fake_client = Mock()
+    fake_client.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content='[START]\n[STEP]\n{"action_type":"scale_up","target":"api"}\n[END]'))]
+    )
+    observation = Observation(
+        logs=["WARN api latency above SLO"],
+        metrics={"latency_ms": 250.0, "error_rate": 0.1, "cpu_pct": 85.0, "deployment_version": 20240401.0},
+        alerts=["HighLatency(api)"],
+        system_status="critical",
+        step_count=0,
+        scenario_id="high_latency_easy",
+        difficulty="easy",
+        incident_family="high_latency",
+    )
+
+    with patch.dict("os.environ", {"MODEL_NAME": "openai/gpt-oss-20b"}, clear=False):
+        result = query_hf_router(fake_client, observation)
+
+    assert '"action_type":"scale_up"' in result
+    fake_client.chat.completions.create.assert_called_once()
+    kwargs = fake_client.chat.completions.create.call_args.kwargs
+    assert kwargs["model"] == "openai/gpt-oss-20b"
+    assert kwargs["temperature"] == 0
+    assert kwargs["stream"] is False
+    assert kwargs["extra_body"] == {"seed": 7}
+
+
+def test_structured_log_helpers_emit_expected_blocks(capsys) -> None:
+    log_start("https://example.hf.space", ["high_latency_easy"])
+    log_step(
+        scenario_id="high_latency_easy",
+        step=1,
+        action=Action(action_type="scale_up", target="api"),
+        reward=1.3,
+        done=True,
+        score=1.0,
+    )
+    log_end(
+        BaselineRunReport(
+            model_name="openai/gpt-oss-20b",
+            router_base_url="https://router.huggingface.co/v1",
+            average_score=1.0,
+            task_scores=[
+                BaselineEpisodeResult(
+                    scenario_id="high_latency_easy",
+                    difficulty="easy",
+                    score=1.0,
+                    terminal_grade=1.0,
+                    steps_taken=1,
+                    total_reward=1.3,
+                    successful_actions=["scale_up"],
+                )
+            ],
+        )
+    )
+
+    stdout = capsys.readouterr().out.strip().splitlines()
+    assert stdout[0] == "[START]"
+    assert stdout[2] == "[STEP]"
+    assert stdout[4] == "[END]"
+
+
 def test_run_baseline_aggregates_scores() -> None:
     fake_client = Mock()
+    fake_openai_client = Mock()
+    fake_openai_client.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content='[START]\n[STEP]\n{"action_type":"scale_up","target":"api"}\n[END]'))]
+    )
     reset_response = Mock()
     reset_response.json.return_value = {
         "observation": {
@@ -169,8 +259,8 @@ def test_run_baseline_aggregates_scores() -> None:
     context_manager.__exit__ = Mock(return_value=False)
 
     with patch("incident_response_rl.inference.httpx.Client", return_value=context_manager), patch(
-        "incident_response_rl.inference.query_hf_router",
-        return_value='[START]\n[STEP]\n{"action_type":"scale_up","target":"api"}\n[END]',
+        "incident_response_rl.inference.create_llm_client",
+        return_value=fake_openai_client,
     ):
         report = run_baseline("http://127.0.0.1:8000")
 

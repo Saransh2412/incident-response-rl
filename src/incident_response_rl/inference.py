@@ -159,6 +159,12 @@ def extract_successful_actions(observation: Observation) -> list[str]:
     return []
 
 
+def format_action_for_log(action: Action) -> str:
+    if action.target:
+        return f"{action.action_type} {action.target}"
+    return action.action_type
+
+
 def log_start(task: str, env: str, model: str) -> None:
     print("[START]", flush=True)
     print(
@@ -179,7 +185,7 @@ def log_step(step: int, action: Action, reward: float, done: bool, error: str | 
         json.dumps(
             {
                 "step": step,
-                "action": action.model_dump_json(exclude={"metadata"}, exclude_none=True),
+                "action": format_action_for_log(action),
                 "reward": reward,
                 "done": done,
                 "error": error,

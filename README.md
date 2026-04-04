@@ -176,6 +176,7 @@ The script emits structured stdout logs in this order:
 
 - `[START]` once with `task`, `env`, `model`
 - `[STEP]` once per environment step with `step`, `action`, `reward`, `done`, `error`
+  - `action` is emitted as a plain-text action string such as `scale_up api`
 - `[END]` once with `success`, `steps`, `score`, `rewards`
 
 ## Latest Recorded Baseline Scores

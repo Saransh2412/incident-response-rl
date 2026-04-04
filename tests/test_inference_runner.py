@@ -7,6 +7,7 @@ from incident_response_rl.inference import (
     choose_runbook_action,
     create_llm_client,
     extract_successful_actions,
+    format_action_for_log,
     log_end,
     log_start,
     log_step,
@@ -122,6 +123,11 @@ def test_extract_successful_actions_reads_nested_info() -> None:
     assert extract_successful_actions(observation) == ["restart_service"]
 
 
+def test_format_action_for_log_returns_plain_text() -> None:
+    assert format_action_for_log(Action(action_type="scale_up", target="api")) == "scale_up api"
+    assert format_action_for_log(Action(action_type="analyze_logs")) == "analyze_logs"
+
+
 def test_create_llm_client_uses_hf_router_env() -> None:
     with patch.dict(
         "os.environ",
@@ -193,6 +199,7 @@ def test_structured_log_helpers_emit_expected_blocks(capsys) -> None:
     assert list(start_payload.keys()) == ["task", "env", "model"]
     assert list(step_payload.keys()) == ["step", "action", "reward", "done", "error"]
     assert list(end_payload.keys()) == ["success", "steps", "score", "rewards"]
+    assert step_payload["action"] == "scale_up api"
 
 
 def test_run_baseline_aggregates_scores() -> None:
@@ -333,5 +340,7 @@ def test_run_baseline_stdout_matches_sample_style(capsys) -> None:
     for index in step_markers:
         payload = json.loads(stdout[index + 1])
         assert list(payload.keys()) == ["step", "action", "reward", "done", "error"]
+        assert isinstance(payload["action"], str)
+        assert payload["action"] in {"scale_up api", "restart_service api"}
     end_payload = json.loads(stdout[-1])
     assert list(end_payload.keys()) == ["success", "steps", "score", "rewards"]

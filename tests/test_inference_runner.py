@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -167,38 +168,31 @@ def test_query_hf_router_uses_openai_client_shape() -> None:
 
 
 def test_structured_log_helpers_emit_expected_blocks(capsys) -> None:
-    log_start("https://example.hf.space", ["high_latency_easy"])
+    log_start(task="all_tasks", env="incident-response-rl", model="openai/gpt-oss-20b")
     log_step(
-        scenario_id="high_latency_easy",
         step=1,
         action=Action(action_type="scale_up", target="api"),
         reward=1.3,
         done=True,
-        score=1.0,
+        error=None,
     )
     log_end(
-        BaselineRunReport(
-            model_name="openai/gpt-oss-20b",
-            router_base_url="https://router.huggingface.co/v1",
-            average_score=1.0,
-            task_scores=[
-                BaselineEpisodeResult(
-                    scenario_id="high_latency_easy",
-                    difficulty="easy",
-                    score=1.0,
-                    terminal_grade=1.0,
-                    steps_taken=1,
-                    total_reward=1.3,
-                    successful_actions=["scale_up"],
-                )
-            ],
-        )
+        success=True,
+        steps=1,
+        score=1.0,
+        rewards=[1.3],
     )
 
     stdout = capsys.readouterr().out.strip().splitlines()
     assert stdout[0] == "[START]"
     assert stdout[2] == "[STEP]"
     assert stdout[4] == "[END]"
+    start_payload = json.loads(stdout[1])
+    step_payload = json.loads(stdout[3])
+    end_payload = json.loads(stdout[5])
+    assert list(start_payload.keys()) == ["task", "env", "model"]
+    assert list(step_payload.keys()) == ["step", "action", "reward", "done", "error"]
+    assert list(end_payload.keys()) == ["success", "steps", "score", "rewards"]
 
 
 def test_run_baseline_aggregates_scores() -> None:
@@ -268,3 +262,76 @@ def test_run_baseline_aggregates_scores() -> None:
     assert len(report.task_scores) == 3
     assert all(item.total_reward == 1.3 for item in report.task_scores)
     assert all(item.successful_actions == ["scale_up"] for item in report.task_scores)
+
+
+def test_run_baseline_stdout_matches_sample_style(capsys) -> None:
+    fake_client = Mock()
+    fake_openai_client = Mock()
+    fake_openai_client.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content='[START]\n[STEP]\n{"action_type":"scale_up","target":"api"}\n[END]'))]
+    )
+    reset_response = Mock()
+    reset_response.json.return_value = {
+        "observation": {
+            "logs": [],
+            "metrics": {},
+            "alerts": [],
+            "system_status": "critical",
+            "step_count": 0,
+            "scenario_id": "high_latency_easy",
+            "difficulty": "easy",
+            "incident_family": "high_latency",
+            "last_transition_reason": "incident injected",
+            "task_score": 0.0,
+            "terminal_grade": None,
+            "done": False,
+            "reward": None,
+            "metadata": {},
+        }
+    }
+    state_response = Mock()
+    state_response.json.return_value = {"episode_id": "ep-1", "step_count": 0}
+    step_response = Mock()
+    step_response.json.return_value = {
+        "observation": {
+            "logs": [],
+            "metrics": {},
+            "alerts": [],
+            "system_status": "healthy",
+            "step_count": 1,
+            "scenario_id": "high_latency_easy",
+            "difficulty": "easy",
+            "incident_family": "high_latency",
+            "last_transition_reason": "resolved issue",
+            "task_score": 1.0,
+            "terminal_grade": 1.0,
+            "metadata": {"info": {"successful_actions": ["scale_up"]}},
+        },
+        "done": True,
+        "reward": 1.3,
+    }
+    fake_client.post.side_effect = [reset_response, step_response, reset_response, step_response, reset_response, step_response]
+    fake_client.get.side_effect = [state_response, state_response, state_response]
+
+    context_manager = Mock()
+    context_manager.__enter__ = Mock(return_value=fake_client)
+    context_manager.__exit__ = Mock(return_value=False)
+
+    with patch("incident_response_rl.inference.httpx.Client", return_value=context_manager), patch(
+        "incident_response_rl.inference.create_llm_client",
+        return_value=fake_openai_client,
+    ):
+        run_baseline("http://127.0.0.1:8000")
+
+    stdout = capsys.readouterr().out.strip().splitlines()
+    assert stdout[0] == "[START]"
+    assert stdout[-2] == "[END]"
+    start_payload = json.loads(stdout[1])
+    assert list(start_payload.keys()) == ["task", "env", "model"]
+    step_markers = [i for i, line in enumerate(stdout) if line == "[STEP]"]
+    assert len(step_markers) == 3
+    for index in step_markers:
+        payload = json.loads(stdout[index + 1])
+        assert list(payload.keys()) == ["step", "action", "reward", "done", "error"]
+    end_payload = json.loads(stdout[-1])
+    assert list(end_payload.keys()) == ["success", "steps", "score", "rewards"]

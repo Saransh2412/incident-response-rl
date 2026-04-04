@@ -174,9 +174,9 @@ This evaluates all 3 tasks against the target environment and writes a reproduci
 
 The script emits structured stdout logs in this order:
 
-- `[START]` once at the beginning
-- `[STEP]` once per environment step
-- `[END]` once with the final run summary
+- `[START]` once with `task`, `env`, `model`
+- `[STEP]` once per environment step with `step`, `action`, `reward`, `done`, `error`
+- `[END]` once with `success`, `steps`, `score`, `rewards`
 
 ## Latest Recorded Baseline Scores
 

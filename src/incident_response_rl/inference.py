@@ -44,6 +44,7 @@ REMEDIAL_ACTIONS = {
     "scale_up",
 }
 RUN_NAME = "incident-response-rl"
+SUCCESS_SCORE_THRESHOLD = 1.0
 
 
 def build_prompt(observation: Observation) -> str:
@@ -158,48 +159,45 @@ def extract_successful_actions(observation: Observation) -> list[str]:
     return []
 
 
-def log_start(env_base_url: str, scenarios: list[str]) -> None:
+def log_start(task: str, env: str, model: str) -> None:
     print("[START]", flush=True)
     print(
         json.dumps(
             {
-                "env": RUN_NAME,
-                "target": env_base_url,
-                "model": os.environ.get("MODEL_NAME", DEFAULT_MODEL_NAME),
-                "scenarios": scenarios,
+                "task": task,
+                "env": env,
+                "model": model,
             }
         ),
         flush=True,
     )
 
 
-def log_step(scenario_id: str, step: int, action: Action, reward: float, done: bool, score: float) -> None:
+def log_step(step: int, action: Action, reward: float, done: bool, error: str | None) -> None:
     print("[STEP]", flush=True)
     print(
         json.dumps(
             {
-                "scenario_id": scenario_id,
                 "step": step,
-                "action_type": action.action_type,
-                "target": action.target,
+                "action": action.model_dump_json(exclude={"metadata"}, exclude_none=True),
                 "reward": reward,
                 "done": done,
-                "score": score,
+                "error": error,
             }
         ),
         flush=True,
     )
 
 
-def log_end(report: BaselineRunReport) -> None:
+def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> None:
     print("[END]", flush=True)
     print(
         json.dumps(
             {
-                "env": RUN_NAME,
-                "model": report.model_name,
-                "average_score": report.average_score,
-                "task_scores": [item.model_dump() for item in report.task_scores],
+                "success": success,
+                "steps": steps,
+                "score": score,
+                "rewards": rewards,
             }
         ),
         flush=True,
@@ -262,7 +260,10 @@ def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> Basel
     scenarios = scenarios or list(DEFAULT_SCENARIOS)
     task_results: list[BaselineEpisodeResult] = []
     llm_client = create_llm_client()
-    log_start(env_base_url, scenarios)
+    model_name = os.environ.get("MODEL_NAME", DEFAULT_MODEL_NAME)
+    log_start(task="all_tasks", env=RUN_NAME, model=model_name)
+    rewards_history: list[float] = []
+    steps_taken = 0
 
     with httpx.Client(timeout=30.0) as client:
         for index, scenario_id in enumerate(scenarios):
@@ -274,12 +275,14 @@ def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> Basel
                 previous_score = observation.task_score
                 action = resolve_action(observation, raw_text)
                 action.metadata["episode_id"] = episode_id
+                error: str | None = None
                 try:
                     next_observation = step_remote_env(client, env_base_url, action)
                 except httpx.HTTPStatusError:
                     fallback_action = choose_fallback_action(observation)
                     fallback_action.metadata["episode_id"] = episode_id
                     action = fallback_action
+                    error = "fallback_action"
                     next_observation = step_remote_env(client, env_base_url, fallback_action)
                 reported_actions = extract_successful_actions(next_observation)
                 if reported_actions:
@@ -290,14 +293,16 @@ def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> Basel
                     and next_observation.task_score > previous_score
                 ):
                     successful_actions = list(dict.fromkeys([*successful_actions, action.action_type]))
-                total_reward += float(next_observation.reward or 0.0)
+                reward_value = float(next_observation.reward or 0.0)
+                total_reward += reward_value
+                rewards_history.append(reward_value)
+                steps_taken += 1
                 log_step(
-                    scenario_id=scenario_id,
                     step=next_observation.step_count,
                     action=action,
-                    reward=float(next_observation.reward or 0.0),
+                    reward=reward_value,
                     done=bool(next_observation.done),
-                    score=float(next_observation.task_score),
+                    error=error,
                 )
                 observation = next_observation
 
@@ -315,12 +320,17 @@ def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> Basel
 
     average_score = round(sum(item.score for item in task_results) / len(task_results), 3)
     report = BaselineRunReport(
-        model_name=os.environ.get("MODEL_NAME", DEFAULT_MODEL_NAME),
+        model_name=model_name,
         router_base_url=os.environ.get("API_BASE_URL", DEFAULT_API_BASE_URL),
         average_score=average_score,
         task_scores=task_results,
     )
-    log_end(report)
+    log_end(
+        success=average_score >= SUCCESS_SCORE_THRESHOLD,
+        steps=steps_taken,
+        score=average_score,
+        rewards=[round(reward, 3) for reward in rewards_history],
+    )
     return report
 
 

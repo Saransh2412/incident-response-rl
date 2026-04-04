@@ -1,0 +1,41 @@
+from fastapi.testclient import TestClient
+
+from server.app import app
+
+
+client = TestClient(app)
+
+
+def test_openenv_health_and_schema() -> None:
+    health = client.get("/health")
+    assert health.status_code == 200
+    assert health.json()["status"] == "healthy"
+
+    schema = client.get("/schema")
+    assert schema.status_code == 200
+    payload = schema.json()
+    assert "action" in payload
+    assert "observation" in payload
+    assert "state" in payload
+
+
+def test_openenv_reset_and_step() -> None:
+    reset = client.post("/reset", json={"scenario_id": "high_latency_easy", "seed": 5})
+    assert reset.status_code == 200
+    reset_payload = reset.json()
+    assert reset_payload["done"] is False
+    assert reset_payload["observation"]["scenario_id"] == "high_latency_easy"
+
+    step = client.post("/step", json={"action": {"action_type": "scale_up", "target": "api"}})
+    assert step.status_code == 200
+    step_payload = step.json()
+    assert step_payload["done"] is True
+    assert step_payload["observation"]["system_status"] == "healthy"
+
+
+def test_openenv_state_endpoint() -> None:
+    client.post("/reset", json={"scenario_id": "service_crash_medium", "seed": 2})
+    state = client.get("/state")
+    assert state.status_code == 200
+    payload = state.json()
+    assert payload["step_count"] == 0

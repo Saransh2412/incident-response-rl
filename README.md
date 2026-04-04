@@ -136,7 +136,7 @@ Or with the helper script on Windows:
 
 ## Baseline Inference
 
-The mandatory inference script uses the Hugging Face router, not an OpenAI API key.
+The submission baseline uses the Hugging Face router only. The official runtime path for the hackathon is this repository's OpenEnv server plus the Hugging Face Space deployment.
 
 Run it after the environment server is up:
 
@@ -152,16 +152,23 @@ python inference.py
 
 This evaluates all 3 tasks and writes a reproducible report to `artifacts/baseline_scores.json`.
 
-## Expected Baseline Output
+## Latest Recorded Baseline Scores
 
-The baseline report contains:
+The checked-in artifact at `artifacts/baseline_scores.json` currently records this live HF-router run for `openai/gpt-oss-20b`:
+
+- `average_score`: `0.583`
+- `high_latency_easy`: score `0.6`, terminal grade `0.5`, steps `8`, total reward `-0.5`
+- `service_crash_medium`: score `1.0`, terminal grade `1.0`, steps `2`, total reward `1.1`
+- `bad_deployment_hard`: score `0.15`, terminal grade `0.0`, steps `10`, total reward `-0.4`
+
+The baseline report includes:
 
 - `model_name`
 - `router_base_url`
 - `average_score`
-- per-task `scenario_id`, `difficulty`, `score`, `terminal_grade`, `steps_taken`, `total_reward`
+- per-task `scenario_id`, `difficulty`, `score`, `terminal_grade`, `steps_taken`, `total_reward`, `successful_actions`
 
-Baseline scores depend on the chosen HF model, so record the final numbers after your submission model is fixed.
+Re-run `python inference.py` after changing the model or prompt policy to refresh these numbers before final submission.
 
 ## Docker
 

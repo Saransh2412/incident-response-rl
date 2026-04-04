@@ -137,7 +137,7 @@ def build_bad_deployment(rng: random.Random, difficulty: Difficulty) -> Incident
         immediate_effects={},
         delayed_effects={
             "rollback_deployment": (0, {"deployment_version": -1.0, "latency_ms": -100.0, "error_rate": -0.14}),
-            "restart_service": (0, {"latency_ms": -80.0, "error_rate": -0.15, "cpu_pct": -18.0}),
+            "restart_service": (0, {"latency_ms": -80.0, "error_rate": -0.16, "cpu_pct": -18.0}),
         },
         improvement_logs={
             "rollback_deployment": ["INFO rollback completed to previous stable release"],

@@ -56,6 +56,17 @@ def test_hard_bad_deployment_requires_rollback_then_restart() -> None:
     assert second.info["terminal_grade"] == 1.0
 
 
+def test_hard_bad_deployment_failing_seed_now_recovers() -> None:
+    env = IncidentResponseEnv()
+    env.reset(seed=12, scenario_id="bad_deployment_hard")
+    first = env.step_result(Action(action_type="rollback_deployment", target="api"))
+    assert first.done is False
+    second = env.step_result(Action(action_type="restart_service", target="api"))
+    assert second.done is True
+    assert second.observation.system_status == "healthy"
+    assert second.info["terminal_grade"] == 1.0
+
+
 def test_noise_injection_is_seeded() -> None:
     env = IncidentResponseEnv()
     obs, info = env.reset(seed=9, scenario_id="bad_deployment_hard")

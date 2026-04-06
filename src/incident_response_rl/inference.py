@@ -166,46 +166,23 @@ def format_action_for_log(action: Action) -> str:
 
 
 def log_start(task: str, env: str, model: str) -> None:
-    print("[START]", flush=True)
-    print(
-        json.dumps(
-            {
-                "task": task,
-                "env": env,
-                "model": model,
-            }
-        ),
-        flush=True,
-    )
+    print(f"[START] task={task} env={env} model={model}", flush=True)
 
 
 def log_step(step: int, action: Action, reward: float, done: bool, error: str | None) -> None:
-    print("[STEP]", flush=True)
+    error_value = error if error else "null"
+    done_value = str(done).lower()
     print(
-        json.dumps(
-            {
-                "step": step,
-                "action": format_action_for_log(action),
-                "reward": reward,
-                "done": done,
-                "error": error,
-            }
-        ),
+        f"[STEP] step={step} action={format_action_for_log(action)} reward={reward:.2f} "
+        f"done={done_value} error={error_value}",
         flush=True,
     )
 
 
 def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> None:
-    print("[END]", flush=True)
+    rewards_str = ",".join(f"{reward:.2f}" for reward in rewards)
     print(
-        json.dumps(
-            {
-                "success": success,
-                "steps": steps,
-                "score": score,
-                "rewards": rewards,
-            }
-        ),
+        f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}",
         flush=True,
     )
 

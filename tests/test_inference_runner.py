@@ -1,4 +1,3 @@
-import json
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -190,16 +189,11 @@ def test_structured_log_helpers_emit_expected_blocks(capsys) -> None:
     )
 
     stdout = capsys.readouterr().out.strip().splitlines()
-    assert stdout[0] == "[START]"
-    assert stdout[2] == "[STEP]"
-    assert stdout[4] == "[END]"
-    start_payload = json.loads(stdout[1])
-    step_payload = json.loads(stdout[3])
-    end_payload = json.loads(stdout[5])
-    assert list(start_payload.keys()) == ["task", "env", "model"]
-    assert list(step_payload.keys()) == ["step", "action", "reward", "done", "error"]
-    assert list(end_payload.keys()) == ["success", "steps", "score", "rewards"]
-    assert step_payload["action"] == "scale_up api"
+    assert stdout == [
+        "[START] task=all_tasks env=incident-response-rl model=openai/gpt-oss-20b",
+        "[STEP] step=1 action=scale_up api reward=1.30 done=true error=null",
+        "[END] success=true steps=1 score=1.000 rewards=1.30",
+    ]
 
 
 def test_run_baseline_aggregates_scores() -> None:
@@ -331,16 +325,13 @@ def test_run_baseline_stdout_matches_sample_style(capsys) -> None:
         run_baseline("http://127.0.0.1:8000")
 
     stdout = capsys.readouterr().out.strip().splitlines()
-    assert stdout[0] == "[START]"
-    assert stdout[-2] == "[END]"
-    start_payload = json.loads(stdout[1])
-    assert list(start_payload.keys()) == ["task", "env", "model"]
-    step_markers = [i for i, line in enumerate(stdout) if line == "[STEP]"]
-    assert len(step_markers) == 3
-    for index in step_markers:
-        payload = json.loads(stdout[index + 1])
-        assert list(payload.keys()) == ["step", "action", "reward", "done", "error"]
-        assert isinstance(payload["action"], str)
-        assert payload["action"] in {"scale_up api", "restart_service api"}
-    end_payload = json.loads(stdout[-1])
-    assert list(end_payload.keys()) == ["success", "steps", "score", "rewards"]
+    assert stdout[0] == "[START] task=all_tasks env=incident-response-rl model=openai/gpt-oss-20b"
+    assert stdout[-1] == "[END] success=true steps=3 score=1.000 rewards=1.30,1.30,1.30"
+    step_lines = [line for line in stdout if line.startswith("[STEP] ")]
+    assert len(step_lines) == 3
+    for line in step_lines:
+        assert " step=1 " in line
+        assert " reward=1.30 " in line
+        assert " done=true " in line
+        assert line.endswith("error=null")
+        assert any(action in line for action in ("action=scale_up api", "action=restart_service api"))

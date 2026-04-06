@@ -172,12 +172,13 @@ python inference.py
 
 This evaluates all 3 tasks against the target environment and writes a reproducible report to `artifacts/baseline_scores.json`.
 
-The script emits structured stdout logs in this order:
+The script emits structured stdout logs in the sample one-line format:
 
-- `[START]` once with `task`, `env`, `model`
-- `[STEP]` once per environment step with `step`, `action`, `reward`, `done`, `error`
-  - `action` is emitted as a plain-text action string such as `scale_up api`
-- `[END]` once with `success`, `steps`, `score`, `rewards`
+- `[START] task=<task> env=<env> model=<model>`
+- `[STEP] step=<n> action=<action> reward=<0.00> done=<true|false> error=<msg|null>`
+- `[END] success=<true|false> steps=<n> score=<0.000> rewards=<r1,r2,...>`
+
+`action` is emitted as a plain-text action string such as `scale_up api`.
 
 ## Latest Recorded Baseline Scores
 

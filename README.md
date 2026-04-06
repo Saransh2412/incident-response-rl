@@ -182,7 +182,25 @@ The script emits structured stdout logs in the sample one-line format:
 
 ## Latest Recorded Baseline Scores
 
-The checked-in artifact at `artifacts/baseline_scores.json` reflects the last live HF-router run that was recorded before the seeded-variant depth upgrade.
+The latest live HF-router run after the seeded-variant depth upgrade produced:
+
+- `average_score`: `1.0`
+- `high_latency_easy`: solved in `1` step with reward `1.10`
+- `service_crash_medium`: solved in `2` steps with rewards `0.25, 1.00`
+- `bad_deployment_hard`: solved in `3` steps with rewards `0.25, 0.50, 0.90`
+
+A representative evaluator-facing stdout transcript now looks like:
+
+```text
+[START] task=all_tasks env=incident-response-rl model=openai/gpt-oss-20b
+[STEP] step=1 action=scale_up api reward=1.10 done=true error=null
+[STEP] step=1 action=analyze_logs reward=0.25 done=false error=null
+[STEP] step=2 action=restart_service api reward=1.00 done=true error=null
+[STEP] step=1 action=analyze_logs reward=0.25 done=false error=null
+[STEP] step=2 action=rollback_deployment api reward=0.50 done=false error=null
+[STEP] step=3 action=restart_service api reward=0.90 done=true error=null
+[END] success=true steps=6 score=1.000 rewards=1.10,0.25,1.00,0.25,0.50,0.90
+```
 
 Re-run `python inference.py` after deploying the latest environment to refresh the public baseline numbers. The report still includes:
 

@@ -11,15 +11,15 @@ def score_state(state: EnvironmentState) -> float:
 
     score = 0.0
     if state.analyzed:
-        score += 0.2
-    if state.successful_actions:
-        score += 0.3 * min(len(state.successful_actions), len(state.scenario.required_actions)) / len(
-            state.scenario.required_actions
-        )
+        score += 0.15
+    required_remedial = [action for action in state.scenario.required_actions if action != "analyze_logs"]
+    completed_remedial = [action for action in state.successful_actions if action != "analyze_logs"]
+    if required_remedial:
+        score += 0.35 * min(len(completed_remedial), len(required_remedial)) / len(required_remedial)
     if state.partial_recovery:
-        score += 0.3
+        score += 0.25
     if state.system_status == "healthy":
-        score += 0.2
+        score += 0.15
     return round(min(score, 1.0), 3)
 
 

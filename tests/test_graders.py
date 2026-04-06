@@ -14,7 +14,7 @@ def test_grader_returns_zero_to_one_scores() -> None:
 
 def test_full_recovery_scores_one() -> None:
     env = IncidentResponseEnv()
-    env.reset(seed=2, scenario_id="high_latency_easy")
+    env.reset(seed=5, scenario_id="high_latency_easy")
     env.step(Action(action_type="scale_up", target="api"))
     state = env.state_data
     assert state is not None
@@ -23,7 +23,7 @@ def test_full_recovery_scores_one() -> None:
 
 def test_partial_recovery_scores_half() -> None:
     env = IncidentResponseEnv()
-    env.reset(seed=3, scenario_id="bad_deployment_hard")
+    env.reset(seed=2, scenario_id="bad_deployment_hard")
     env.step(Action(action_type="rollback_deployment", target="api"))
     state = env.state_data
     assert state is not None

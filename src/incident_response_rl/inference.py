@@ -103,7 +103,23 @@ def choose_fallback_action(observation: Observation) -> Action:
     text = " ".join(observation.logs + observation.alerts).lower()
     metrics = observation.metrics
 
-    if "rollback completed" in text and observation.system_status != "healthy":
+    if observation.step_count == 0 and any(
+        token in text
+        for token in (
+            "feature flag",
+            "configdrift",
+            "config checksum mismatch",
+            "schemamismatch",
+            "schema version",
+            "incompatible schema version",
+            "schema mismatch",
+            "queuepressure",
+            "upstreamtimeout",
+            "poolwait",
+        )
+    ):
+        return Action(action_type="analyze_logs")
+    if any(marker in text for marker in ("rollback completed", "rollback disabled", "restored previous")) and observation.system_status != "healthy":
         return Action(action_type="restart_service", target="api")
     if "deploymentregression" in text or "deployed api version" in text or "release promotion" in text:
         return Action(action_type="rollback_deployment", target="api")
@@ -118,7 +134,24 @@ def choose_runbook_action(observation: Observation) -> Action | None:
     text = " ".join(observation.logs + observation.alerts).lower()
     metrics = observation.metrics
 
-    if "rollback completed" in text and observation.system_status != "healthy":
+    if observation.step_count == 0 and any(
+        token in text
+        for token in (
+            "feature flag",
+            "featureflagdrift",
+            "configdrift",
+            "config checksum mismatch",
+            "schemamismatch",
+            "schema version",
+            "incompatible schema version",
+            "schema mismatch",
+            "queuepressure",
+            "upstreamtimeout",
+            "poolwait",
+        )
+    ):
+        return Action(action_type="analyze_logs")
+    if any(marker in text for marker in ("rollback completed", "rollback disabled", "restored previous")) and observation.system_status != "healthy":
         return Action(action_type="restart_service", target="api")
     if "deploymentregression" in text or "deployed api version" in text:
         return Action(action_type="rollback_deployment", target="api")

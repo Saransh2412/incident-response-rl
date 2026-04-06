@@ -86,8 +86,30 @@ def metrics_improved(before: dict[str, float], after: dict[str, float]) -> bool:
     )
 
 
+def improvement_bonus(before: dict[str, float], after: dict[str, float]) -> float:
+    latency_drop = max(0.0, before["latency_ms"] - after["latency_ms"])
+    error_drop = max(0.0, before["error_rate"] - after["error_rate"])
+    cpu_drop = max(0.0, before["cpu_pct"] - after["cpu_pct"])
+    composite = (latency_drop / 120.0) + (error_drop / 0.18) + (cpu_drop / 30.0)
+    if composite >= 2.0:
+        return 0.35
+    if composite >= 1.0:
+        return 0.25
+    if composite > 0.0:
+        return 0.15
+    return 0.0
+
+
 def action_already_successful(state: EnvironmentState, action_type: ActionType) -> bool:
     return action_type in state.successful_actions
+
+
+def expected_next_action(state: EnvironmentState) -> ActionType | None:
+    required = state.scenario.required_actions
+    index = len(state.successful_actions)
+    if index >= len(required):
+        return None
+    return required[index]
 
 
 def transition(state: EnvironmentState, action: Action) -> tuple[float, list[str]]:
@@ -102,18 +124,23 @@ def transition(state: EnvironmentState, action: Action) -> tuple[float, list[str
         if not state.analyzed:
             state.analyzed = True
             state.logs.extend(state.scenario.diagnosis_hints)
-            reward_value += 0.2
-            reasons.append("diagnosis improved")
+            if expected_next_action(state) == "analyze_logs":
+                state.successful_actions.append("analyze_logs")
+                reward_value += 0.25
+                reasons.append("required diagnosis completed")
+            else:
+                reward_value += 0.15
+                reasons.append("diagnosis improved")
         else:
-            reward_value -= 0.1
+            reward_value -= 0.12
             reasons.append("repeated ineffective action")
     elif action.action_type == "escalate":
         state.terminated_by_escalation = True
-        reward_value -= 0.3
+        reward_value -= 0.35
         reasons.append("early failed escalation")
     elif is_correct_next_action(state, action.action_type) and action_target_matches(state, action):
         state.successful_actions.append(action.action_type)
-        reward_value += 0.3
+        reward_value += 0.25
         reasons.append("correct remedial action")
         immediate_delta = state.scenario.immediate_effects.get(action.action_type)
         if immediate_delta:
@@ -142,15 +169,19 @@ def transition(state: EnvironmentState, action: Action) -> tuple[float, list[str
                         transition_reason=effect.transition_reason,
                     )
                 )
-        if not state.analyzed:
-            reward_value += 0.2
+        if not state.analyzed and expected_next_action(state) != "analyze_logs":
+            reward_value += 0.1
             reasons.append("correct diagnosis")
     elif action_already_successful(state, action.action_type):
-        reward_value -= 0.1
+        reward_value -= 0.12
         reasons.append("repeated ineffective action")
         _worsen_for_wrong_action(state, action)
     else:
         reward_value -= 0.2
+        if expected_next_action(state) == "analyze_logs" and action.action_type in {"restart_service", "rollback_deployment", "scale_up"}:
+            reward_value -= 0.15
+            reasons.append("premature action caused avoidable disruption")
+            apply_metric_delta(state.metrics, {"latency_ms": 12.0, "error_rate": 0.03, "cpu_pct": 3.0})
         reasons.append("wrong action")
         _worsen_for_wrong_action(state, action)
 
@@ -158,14 +189,14 @@ def transition(state: EnvironmentState, action: Action) -> tuple[float, list[str
     state.partial_recovery = state.system_status != "critical"
 
     if metrics_improved(before_metrics, state.metrics):
-        reward_value += 0.3
+        reward_value += improvement_bonus(before_metrics, state.metrics)
         reasons.append("system improved")
 
     if len(state.successful_actions) == len(state.scenario.required_actions) and not state.pending_effects:
         state.system_status = update_system_status(state.metrics)
         if state.system_status == "healthy":
             state.resolved = True
-            reward_value += 0.5
+            reward_value += 0.4
             reasons.append("resolved issue")
 
     state.last_transition_reason = "; ".join(reasons) if reasons else "no-op"

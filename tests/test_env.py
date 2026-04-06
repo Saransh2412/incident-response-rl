@@ -22,7 +22,7 @@ def test_observation_schema_and_validation() -> None:
 
 def test_high_latency_happy_path_resolves() -> None:
     env = IncidentResponseEnv()
-    env.reset(seed=2, scenario_id="high_latency_easy")
+    env.reset(seed=5, scenario_id="high_latency_easy")
     result = env.step_result(Action(action_type="scale_up", target="api"))
     assert result.done is True
     assert result.observation.system_status == "healthy"
@@ -31,7 +31,7 @@ def test_high_latency_happy_path_resolves() -> None:
 
 def test_service_crash_happy_path_resolves() -> None:
     env = IncidentResponseEnv()
-    env.reset(seed=2, scenario_id="service_crash_medium")
+    env.reset(seed=3, scenario_id="service_crash_medium")
     result = env.step_result(Action(action_type="restart_service", target="api"))
     assert result.done is True
     assert result.observation.system_status == "healthy"
@@ -47,7 +47,7 @@ def test_wrong_action_regresses_or_fails_to_improve() -> None:
 
 def test_hard_bad_deployment_requires_rollback_then_restart() -> None:
     env = IncidentResponseEnv()
-    env.reset(seed=3, scenario_id="bad_deployment_hard")
+    env.reset(seed=2, scenario_id="bad_deployment_hard")
     first = env.step_result(Action(action_type="rollback_deployment", target="api"))
     assert first.done is False
     second = env.step_result(Action(action_type="restart_service", target="api"))
@@ -58,13 +58,41 @@ def test_hard_bad_deployment_requires_rollback_then_restart() -> None:
 
 def test_hard_bad_deployment_failing_seed_now_recovers() -> None:
     env = IncidentResponseEnv()
-    env.reset(seed=12, scenario_id="bad_deployment_hard")
+    env.reset(seed=1, scenario_id="bad_deployment_hard")
+    diagnosis = env.step_result(Action(action_type="analyze_logs"))
+    assert diagnosis.done is False
     first = env.step_result(Action(action_type="rollback_deployment", target="api"))
     assert first.done is False
     second = env.step_result(Action(action_type="restart_service", target="api"))
     assert second.done is True
     assert second.observation.system_status == "healthy"
     assert second.info["terminal_grade"] == 1.0
+
+
+def test_high_latency_variant_can_require_diagnosis_before_scale() -> None:
+    env = IncidentResponseEnv()
+    env.reset(seed=3, scenario_id="high_latency_easy")
+    premature = env.step_result(Action(action_type="scale_up", target="api"))
+    assert premature.done is False
+    assert premature.reward.value < 0
+    diagnosed = env.step_result(Action(action_type="analyze_logs"))
+    assert diagnosed.reward.value > 0
+    resolved = env.step_result(Action(action_type="scale_up", target="api"))
+    assert resolved.done is True
+    assert resolved.observation.system_status == "healthy"
+
+
+def test_service_crash_variant_requires_diagnosis_before_restart() -> None:
+    env = IncidentResponseEnv()
+    env.reset(seed=4, scenario_id="service_crash_medium")
+    premature = env.step_result(Action(action_type="restart_service", target="api"))
+    assert premature.done is False
+    assert premature.reward.value < 0
+    diagnosed = env.step_result(Action(action_type="analyze_logs"))
+    assert diagnosed.reward.value > 0
+    resolved = env.step_result(Action(action_type="restart_service", target="api"))
+    assert resolved.done is True
+    assert resolved.observation.system_status == "healthy"
 
 
 def test_noise_injection_is_seeded() -> None:
@@ -76,9 +104,9 @@ def test_noise_injection_is_seeded() -> None:
 
 def test_reward_and_partial_recovery_grading() -> None:
     env = IncidentResponseEnv()
-    env.reset(seed=4, scenario_id="bad_deployment_hard")
+    env.reset(seed=2, scenario_id="bad_deployment_hard")
     first = env.step_result(Action(action_type="rollback_deployment", target="api"))
-    assert first.reward.value >= 0.3
+    assert first.reward.value > 0
     state = env.state_data
     assert state is not None
     assert grade_final_state(state) == 0.5
@@ -86,8 +114,17 @@ def test_reward_and_partial_recovery_grading() -> None:
 
 def test_discrete_action_mapping_works() -> None:
     env = IncidentResponseEnv()
-    env.reset(seed=2, scenario_id="high_latency_easy")
+    env.reset(seed=5, scenario_id="high_latency_easy")
     _, reward, done, info = env.step(3)
     assert reward > 0
     assert done is True
     assert info["terminal_grade"] == 1.0
+
+
+def test_seeded_variants_change_surface_signals() -> None:
+    env_a = IncidentResponseEnv()
+    env_b = IncidentResponseEnv()
+    obs_a, _ = env_a.reset(seed=1, scenario_id="bad_deployment_hard")
+    obs_b, _ = env_b.reset(seed=3, scenario_id="bad_deployment_hard")
+    assert obs_a.logs != obs_b.logs
+    assert obs_a.alerts != obs_b.alerts

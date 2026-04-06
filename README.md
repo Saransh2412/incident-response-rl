@@ -57,29 +57,29 @@ Observation metadata includes:
 
 ## Tasks
 
-The built-in tasks are deterministic and graded from `0.0` to `1.0`:
+The environment exposes 3 public task families, each graded from `0.0` to `1.0`:
 
 - `high_latency_easy`
-  - Goal: detect capacity saturation and scale the API service.
-  - Expected path: `scale_up`
+  - Goal: diagnose API latency caused by capacity or burst-amplification issues.
+  - Typical path: `scale_up`, with some seeded variants requiring `analyze_logs` first.
 - `service_crash_medium`
-  - Goal: recover a crash-looping API with a misleading signal present.
-  - Expected path: `restart_service`
+  - Goal: recover a crash-looping API while distinguishing direct restarts from config or dependency-rooted failures.
+  - Typical path: `restart_service`, with diagnosis-first variants that punish premature restarts.
 - `bad_deployment_hard`
-  - Goal: unwind a bad deploy with cascading symptoms and delayed recovery.
-  - Expected path: `rollback_deployment` then `restart_service`
+  - Goal: unwind a bad release with delayed recovery and multi-step dependencies.
+  - Typical path: `rollback_deployment` then `restart_service`, with harder seeded variants requiring `analyze_logs` before rollback.
+
+When `scenario_id` is omitted, the environment samples from these task families using the provided seed. The family name stays stable while the evidence, noise, and required sequence can vary by seed.
 
 ## Reward And Grading
 
-Dense reward shaping is used during the trajectory:
+Dense reward shaping is deterministic but trajectory-sensitive:
 
-- `+0.2` diagnosis improvement
-- `+0.3` correct remedial action
-- `+0.3` measurable system improvement
-- `+0.5` full incident resolution
-- `-0.2` wrong or harmful action
-- `-0.1` repeated ineffective action
-- `-0.3` failed escalation
+- diagnosis earns a smaller reward unless it is a required step in the recovery sequence
+- correct remedial actions earn reward before full resolution, enabling partial-progress learning
+- measurable system improvement uses improvement bands, so stronger recoveries earn more than marginal ones
+- premature or unnecessary actions incur larger penalties in diagnosis-first variants
+- escalation ends the episode with a low score
 
 Deterministic task graders are separate from dense reward:
 
@@ -182,21 +182,14 @@ The script emits structured stdout logs in the sample one-line format:
 
 ## Latest Recorded Baseline Scores
 
-The checked-in artifact at `artifacts/baseline_scores.json` currently records this live HF-router run for `openai/gpt-oss-20b`:
+The checked-in artifact at `artifacts/baseline_scores.json` reflects the last live HF-router run that was recorded before the seeded-variant depth upgrade.
 
-- `average_score`: `1.0`
-- `high_latency_easy`: score `1.0`, terminal grade `1.0`, steps `1`, total reward `1.3`, successful actions `["scale_up"]`
-- `service_crash_medium`: score `1.0`, terminal grade `1.0`, steps `1`, total reward `1.3`, successful actions `["restart_service"]`
-- `bad_deployment_hard`: score `1.0`, terminal grade `1.0`, steps `2`, total reward `2.1`, successful actions `["rollback_deployment", "restart_service"]`
-
-The baseline report includes:
+Re-run `python inference.py` after deploying the latest environment to refresh the public baseline numbers. The report still includes:
 
 - `model_name`
 - `router_base_url`
 - `average_score`
 - per-task `scenario_id`, `difficulty`, `score`, `terminal_grade`, `steps_taken`, `total_reward`, `successful_actions`
-
-Re-run `python inference.py` after changing the model or prompt policy to refresh these numbers before final submission.
 
 ## Docker
 

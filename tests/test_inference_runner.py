@@ -81,6 +81,23 @@ def test_runbook_prefers_rollback_then_restart() -> None:
     assert restart_action.action_type == "restart_service"
 
 
+def test_runbook_prefers_diagnosis_for_ambiguous_variants() -> None:
+    action = choose_runbook_action(
+        Observation(
+            logs=["WARN checkout failures spiked after feature flag rollout"],
+            metrics={"latency_ms": 280.0, "error_rate": 0.2, "cpu_pct": 60.0, "deployment_version": 20240402.0},
+            alerts=["FeatureFlagDrift(api)"],
+            system_status="critical",
+            step_count=0,
+            scenario_id="bad_deployment_hard",
+            difficulty="hard",
+            incident_family="bad_deployment",
+        )
+    )
+    assert action is not None
+    assert action.action_type == "analyze_logs"
+
+
 def test_parse_action_block_defaults_target_for_service_actions() -> None:
     action = parse_action_block(
         '[START]\n[STEP]\n{"action_type":"scale_up","target":null}\n[END]'

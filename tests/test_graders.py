@@ -1,5 +1,5 @@
 from incident_response_rl.env import IncidentResponseEnv
-from incident_response_rl.graders import grade_episode, score_state
+from incident_response_rl.graders import grade_episode, grading_components, score_state
 from incident_response_rl.models import Action
 
 
@@ -64,7 +64,7 @@ def test_inefficient_but_successful_path_scores_below_perfect() -> None:
         ],
     )
     assert state.system_status == "healthy"
-    assert 0.90 <= grade_episode(state) < 0.99
+    assert 0.60 <= grade_episode(state) < 0.90
 
 
 def test_repeated_wrong_actions_score_low() -> None:
@@ -77,7 +77,7 @@ def test_repeated_wrong_actions_score_low() -> None:
         ],
     )
     assert state.system_status == "critical"
-    assert 0.01 <= grade_episode(state) <= 0.25
+    assert 0.01 <= grade_episode(state) <= 0.30
 
 
 def test_escalation_failure_scores_near_floor() -> None:
@@ -88,3 +88,61 @@ def test_escalation_failure_scores_near_floor() -> None:
     )
     assert state.terminated_by_escalation is True
     assert 0.01 <= grade_episode(state) <= 0.20
+
+
+def test_grading_components_have_expected_keys_and_ranges() -> None:
+    state = _run_actions("high_latency_easy", 1, [])
+    components = grading_components(state)
+    assert set(components) == {
+        "diagnosis",
+        "sequence",
+        "effectiveness",
+        "efficiency",
+        "safety",
+    }
+    assert all(0.0 <= value <= 1.0 for value in components.values())
+
+
+def test_diagnosis_first_path_changes_component_profile() -> None:
+    direct_state = _run_actions(
+        "service_crash_medium",
+        3,
+        [Action(action_type="restart_service", target="api")],
+    )
+    diagnosis_state = _run_actions(
+        "service_crash_medium",
+        4,
+        [
+            Action(action_type="analyze_logs"),
+            Action(action_type="restart_service", target="api"),
+        ],
+    )
+    direct = grading_components(direct_state)
+    diagnosed = grading_components(diagnosis_state)
+    assert direct != diagnosed
+    assert diagnosed["diagnosis"] >= direct["diagnosis"]
+
+
+def test_partial_hard_recovery_has_medium_effectiveness_and_lower_sequence() -> None:
+    state = _run_actions(
+        "bad_deployment_hard",
+        2,
+        [Action(action_type="rollback_deployment", target="api")],
+    )
+    components = grading_components(state)
+    assert 0.4 <= components["effectiveness"] <= 0.7
+    assert components["sequence"] < 1.0
+
+
+def test_repeated_wrong_actions_lower_safety_and_efficiency() -> None:
+    state = _run_actions(
+        "service_crash_medium",
+        3,
+        [
+            Action(action_type="scale_up", target="api"),
+            Action(action_type="scale_up", target="api"),
+        ],
+    )
+    components = grading_components(state)
+    assert components["safety"] < 0.6
+    assert components["efficiency"] < 0.8

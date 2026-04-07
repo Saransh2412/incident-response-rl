@@ -98,7 +98,13 @@ def test_grader_endpoint_scores_task_trajectory() -> None:
     assert payload["task_id"] == "high_latency_easy"
     assert 0.0 < payload["score"] < 1.0
     assert payload["steps_taken"] == 1
-    assert "breakdown" in payload
+    assert set(payload["breakdown"]) == {
+        "diagnosis",
+        "sequence",
+        "effectiveness",
+        "efficiency",
+        "safety",
+    }
 
 
 def test_info_endpoint_exposes_task_registry_and_spaces() -> None:
@@ -109,6 +115,13 @@ def test_info_endpoint_exposes_task_registry_and_spaces() -> None:
     assert len(payload["tasks"]) == 3
     assert "properties" in payload["action_space"]
     assert "properties" in payload["observation_space"]
+    assert set(payload["grading_components"]) == {
+        "diagnosis",
+        "sequence",
+        "effectiveness",
+        "efficiency",
+        "safety",
+    }
 
 
 def test_baseline_endpoint_returns_one_result_per_task() -> None:
@@ -117,3 +130,30 @@ def test_baseline_endpoint_returns_one_result_per_task() -> None:
     payload = response.json()
     assert len(payload["results"]) == 3
     assert 0.0 < payload["aggregate_score"] < 1.0
+    for result in payload["results"]:
+        assert set(result["breakdown"]) == {
+            "diagnosis",
+            "sequence",
+            "effectiveness",
+            "efficiency",
+            "safety",
+        }
+
+
+def test_grader_endpoint_empty_trajectory_has_five_components() -> None:
+    response = client.post(
+        "/grader",
+        json={
+            "task_id": "service_crash_medium",
+            "trajectory": [],
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()["result"]
+    assert set(payload["breakdown"]) == {
+        "diagnosis",
+        "sequence",
+        "effectiveness",
+        "efficiency",
+        "safety",
+    }

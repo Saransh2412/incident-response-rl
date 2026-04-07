@@ -79,6 +79,14 @@ The service also exposes validator-facing task and grading surfaces:
 - `POST /baseline` runs the built-in deterministic heuristic over one or all public tasks
 - `POST /reset` accepts either `scenario_id` or `task_id`
 
+Every grader-visible result includes 5 explicit grading components:
+
+- `diagnosis`
+- `sequence`
+- `effectiveness`
+- `efficiency`
+- `safety`
+
 ## Reward And Grading
 
 Dense reward shaping is deterministic but trajectory-sensitive:

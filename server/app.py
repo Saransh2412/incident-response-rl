@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from fastapi import Body
+from pydantic import Field
 from openenv.core.env_server.http_server import create_app
 
 from incident_response_rl.env import IncidentResponseEnv
-from incident_response_rl.graders import grade_episode, score_state
+from incident_response_rl.graders import COMPONENT_WEIGHTS, grade_episode, grading_components, score_state
 from incident_response_rl.models import Action, Observation
 from incident_response_rl.inference import choose_fallback_action, choose_runbook_action
 from incident_response_rl.tasks import (
@@ -72,12 +73,7 @@ def _grade_task_result(task_id: str, seed: int | None, trajectory: list[dict]) -
 
     score = score_state(state)
     terminal_grade = grade_episode(state)
-    breakdown = {
-        "task_score": round(score, 3),
-        "terminal_grade": round(terminal_grade, 3),
-        "resolved_bonus": 0.15 if state.resolved else 0.0,
-        "efficiency_signal": round(max(0.0, 1.0 - (state.step_count / max(1, state.scenario.max_steps))), 3),
-    }
+    breakdown = grading_components(state)
     return GraderResult(
         task_id=resolved_task.id,
         score=score,
@@ -109,6 +105,13 @@ def get_info() -> EnvironmentInfo:
         max_steps=10,
         action_space=_action_space_schema(),
         observation_space=_observation_space_schema(),
+        grading_components={
+            "diagnosis": "Whether the agent identified the incident correctly when diagnosis was needed.",
+            "sequence": "Whether the remediation actions were performed in the correct order.",
+            "effectiveness": "How much the system actually improved from the chosen actions.",
+            "efficiency": "How cleanly the task was solved without wasted or repeated actions.",
+            "safety": "Whether harmful or clearly wrong actions were avoided.",
+        },
     )
 
 

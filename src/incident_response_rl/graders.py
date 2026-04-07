@@ -4,6 +4,13 @@ from .models import EnvironmentState
 
 MIN_EXPORTED_SCORE = 0.01
 MAX_EXPORTED_SCORE = 0.99
+COMPONENT_WEIGHTS = {
+    "diagnosis": 0.20,
+    "sequence": 0.25,
+    "effectiveness": 0.25,
+    "efficiency": 0.15,
+    "safety": 0.15,
+}
 
 
 def _open_interval(score: float) -> float:
@@ -28,6 +35,21 @@ def _sequence_completion(state: EnvironmentState) -> float:
         return 1.0
     completed = _successful_actions_without_diagnosis(state)
     return min(len(completed), len(required)) / len(required)
+
+
+def _sequence_score(state: EnvironmentState) -> float:
+    required = state.scenario.required_actions
+    if not required:
+        return 1.0
+
+    matched = 0
+    history = [action.action_type for action in state.action_history]
+    for expected in required:
+        if matched < len(history) and history[matched] == expected:
+            matched += 1
+        elif expected in history[matched + 1 :]:
+            break
+    return matched / len(required)
 
 
 def _wrong_action_count(state: EnvironmentState) -> int:
@@ -68,7 +90,7 @@ def _efficiency_score(state: EnvironmentState) -> float:
     return max(0.0, min(1.0, step_budget_score - wrong_penalty - repeat_penalty - escalation_penalty))
 
 
-def _outcome_score(state: EnvironmentState) -> float:
+def _effectiveness_score(state: EnvironmentState) -> float:
     if state.resolved and state.system_status == "healthy":
         return 1.0
     if state.system_status == "healthy":
@@ -78,12 +100,32 @@ def _outcome_score(state: EnvironmentState) -> float:
     return 0.15
 
 
+def _safety_score(state: EnvironmentState) -> float:
+    wrong_penalty = min(0.7, 0.25 * _wrong_action_count(state))
+    escalation_penalty = 0.8 if state.terminated_by_escalation else 0.0
+    diagnosis_required = "analyze_logs" in state.scenario.required_actions
+    premature_restart_penalty = 0.0
+    if diagnosis_required and state.action_history:
+        first_action = state.action_history[0].action_type
+        if first_action != "analyze_logs":
+            premature_restart_penalty = 0.25
+    return max(0.0, min(1.0, 1.0 - wrong_penalty - escalation_penalty - premature_restart_penalty))
+
+
+def grading_components(state: EnvironmentState) -> dict[str, float]:
+    components = {
+        "diagnosis": _diagnosis_score(state),
+        "sequence": _sequence_score(state),
+        "effectiveness": _effectiveness_score(state),
+        "efficiency": _efficiency_score(state),
+        "safety": _safety_score(state),
+    }
+    return {name: round(min(max(value, 0.0), 1.0), 3) for name, value in components.items()}
+
+
 def _raw_terminal_grade(state: EnvironmentState) -> float:
-    diagnosis = _diagnosis_score(state)
-    sequence = _sequence_completion(state)
-    efficiency = _efficiency_score(state)
-    outcome = _outcome_score(state)
-    weighted = (0.20 * diagnosis) + (0.35 * sequence) + (0.20 * efficiency) + (0.25 * outcome)
+    components = grading_components(state)
+    weighted = sum(COMPONENT_WEIGHTS[name] * components[name] for name in COMPONENT_WEIGHTS)
     return min(max(weighted, 0.0), 1.0)
 
 
@@ -93,11 +135,14 @@ def score_state(state: EnvironmentState) -> float:
     if state.terminated_by_escalation:
         return MIN_EXPORTED_SCORE
 
-    diagnosis = 0.20 * _diagnosis_score(state)
-    sequence = 0.35 * _sequence_completion(state)
-    recovery = 0.25 if state.partial_recovery else 0.0
-    healthy_bonus = 0.10 if state.system_status == "healthy" else 0.0
-    score = min(0.95, diagnosis + sequence + recovery + healthy_bonus)
+    components = grading_components(state)
+    score = (
+        (COMPONENT_WEIGHTS["diagnosis"] * components["diagnosis"])
+        + (COMPONENT_WEIGHTS["sequence"] * components["sequence"])
+        + (COMPONENT_WEIGHTS["effectiveness"] * components["effectiveness"])
+        + (0.05 if state.partial_recovery else 0.0)
+    )
+    score = min(0.95, score)
     return _open_interval(score)
 
 

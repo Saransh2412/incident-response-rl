@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, confloat
 
 from .models import Action, Difficulty
 
@@ -38,13 +38,14 @@ class EnvironmentInfo(BaseModel):
     max_steps: int = 10
     action_space: dict
     observation_space: dict
+    grading_components: dict[str, str]
 
 
 class GraderRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     task_id: str
-    trajectory: list[dict] = Field(default_factory=list)
+    trajectory: list[dict]
     seed: int | None = None
 
 
@@ -52,9 +53,9 @@ class GraderResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     task_id: str
-    score: float
+    score: confloat(gt=0.0, lt=1.0)
     max_score: float = 1.0
-    breakdown: dict[str, float] = Field(default_factory=dict)
+    breakdown: dict[str, confloat(ge=0.0, le=1.0)] = Field(default_factory=dict)
     feedback: str = ""
     steps_taken: int
     hints_used: int = 0

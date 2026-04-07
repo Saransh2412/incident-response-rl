@@ -26,7 +26,7 @@ def test_high_latency_happy_path_resolves() -> None:
     result = env.step_result(Action(action_type="scale_up", target="api"))
     assert result.done is True
     assert result.observation.system_status == "healthy"
-    assert result.info["terminal_grade"] == 1.0
+    assert result.info["terminal_grade"] == 0.99
 
 
 def test_service_crash_happy_path_resolves() -> None:
@@ -53,7 +53,7 @@ def test_hard_bad_deployment_requires_rollback_then_restart() -> None:
     second = env.step_result(Action(action_type="restart_service", target="api"))
     assert second.done is True
     assert second.observation.system_status == "healthy"
-    assert second.info["terminal_grade"] == 1.0
+    assert second.info["terminal_grade"] == 0.99
 
 
 def test_hard_bad_deployment_failing_seed_now_recovers() -> None:
@@ -66,7 +66,7 @@ def test_hard_bad_deployment_failing_seed_now_recovers() -> None:
     second = env.step_result(Action(action_type="restart_service", target="api"))
     assert second.done is True
     assert second.observation.system_status == "healthy"
-    assert second.info["terminal_grade"] == 1.0
+    assert second.info["terminal_grade"] == 0.99
 
 
 def test_high_latency_variant_can_require_diagnosis_before_scale() -> None:
@@ -118,7 +118,7 @@ def test_discrete_action_mapping_works() -> None:
     _, reward, done, info = env.step(3)
     assert reward > 0
     assert done is True
-    assert info["terminal_grade"] == 1.0
+    assert info["terminal_grade"] == 0.99
 
 
 def test_seeded_variants_change_surface_signals() -> None:

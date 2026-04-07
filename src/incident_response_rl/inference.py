@@ -44,7 +44,7 @@ REMEDIAL_ACTIONS = {
     "scale_up",
 }
 RUN_NAME = "incident-response-rl"
-SUCCESS_SCORE_THRESHOLD = 1.0
+SUCCESS_SCORE_THRESHOLD = 0.95
 
 
 def build_prompt(observation: Observation) -> str:

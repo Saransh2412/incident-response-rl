@@ -71,6 +71,12 @@ The environment exposes 3 public task families with deterministic graders, and t
 
 When `scenario_id` is omitted, the environment samples from these task families using the provided seed. The family name stays stable while the evidence, noise, and required sequence can vary by seed.
 
+The service also exposes explicit validator-facing task and grading surfaces:
+
+- `GET /tasks` lists the 3 public tasks and their deterministic grader
+- `POST /grader` grades a proposed action trajectory for a given `task_id`
+- `POST /reset` accepts either `scenario_id` or `task_id`
+
 ## Reward And Grading
 
 Dense reward shaping is deterministic but trajectory-sensitive:
@@ -136,6 +142,20 @@ Or with the helper script on Windows:
 .\run.ps1 -Mode test
 .\run.ps1 -Mode api
 .\run.ps1 -Mode validate
+```
+
+List public tasks directly:
+
+```bash
+curl http://127.0.0.1:7860/tasks
+```
+
+Grade a trajectory directly:
+
+```bash
+curl -X POST http://127.0.0.1:7860/grader \
+  -H "Content-Type: application/json" \
+  -d '{"task_id":"service_crash_medium","actions":[{"action_type":"restart_service","target":"api"}]}'
 ```
 
 For local baseline runs, point `ENV_BASE_URL` at the local server:

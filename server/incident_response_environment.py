@@ -38,7 +38,7 @@ class IncidentResponseEnvironment(Environment[Action, Observation, IncidentState
     ) -> Observation:
         self._episode_id = episode_id or str(uuid4())
         simulator = IncidentResponseEnv()
-        scenario_id = kwargs.get("scenario_id")
+        scenario_id = kwargs.get("scenario_id") or kwargs.get("task_id")
         observation, info = simulator.reset(seed=seed, scenario_id=scenario_id)
         self.__class__._episodes[self._episode_id] = simulator
         self.__class__._current_episode_id = self._episode_id

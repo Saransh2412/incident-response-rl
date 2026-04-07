@@ -61,3 +61,38 @@ def test_unseeded_reset_cycles_three_public_tasks() -> None:
         "service_crash_medium",
         "bad_deployment_hard",
     ]
+
+
+def test_tasks_endpoint_lists_three_public_tasks() -> None:
+    response = client.get("/tasks")
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["id"] for item in payload] == [
+        "high_latency_easy",
+        "service_crash_medium",
+        "bad_deployment_hard",
+    ]
+    assert all(item["grader"] == "grade_episode" for item in payload)
+
+
+def test_reset_accepts_task_id_alias() -> None:
+    reset = client.post("/reset", json={"task_id": "service_crash_medium", "seed": 3})
+    assert reset.status_code == 200
+    payload = reset.json()
+    assert payload["observation"]["scenario_id"] == "service_crash_medium"
+
+
+def test_grader_endpoint_scores_task_trajectory() -> None:
+    response = client.post(
+        "/grader",
+        json={
+            "task_id": "high_latency_easy",
+            "seed": 5,
+            "actions": [{"action_type": "scale_up", "target": "api"}],
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["task_id"] == "high_latency_easy"
+    assert payload["resolved"] is True
+    assert 0.90 <= payload["terminal_grade"] < 1.0

@@ -71,10 +71,12 @@ The environment exposes 3 public task families with deterministic graders, and t
 
 When `scenario_id` is omitted, the environment samples from these task families using the provided seed. The family name stays stable while the evidence, noise, and required sequence can vary by seed.
 
-The service also exposes explicit validator-facing task and grading surfaces:
+The service also exposes validator-facing task and grading surfaces:
 
-- `GET /tasks` lists the 3 public tasks and their deterministic grader
-- `POST /grader` grades a proposed action trajectory for a given `task_id`
+- `GET /info` exposes environment metadata, task registry, max steps, and JSON schemas
+- `GET /tasks` returns the 3 public tasks in a machine-readable wrapper
+- `POST /grader` grades a proposed trajectory for a given `task_id`
+- `POST /baseline` runs the built-in deterministic heuristic over one or all public tasks
 - `POST /reset` accepts either `scenario_id` or `task_id`
 
 ## Reward And Grading
@@ -155,7 +157,15 @@ Grade a trajectory directly:
 ```bash
 curl -X POST http://127.0.0.1:7860/grader \
   -H "Content-Type: application/json" \
-  -d '{"task_id":"service_crash_medium","actions":[{"action_type":"restart_service","target":"api"}]}'
+  -d '{"task_id":"service_crash_medium","trajectory":[{"action_type":"restart_service","target":"api"}]}'
+```
+
+Run the built-in validator-facing baseline:
+
+```bash
+curl -X POST http://127.0.0.1:7860/baseline \
+  -H "Content-Type: application/json" \
+  -d '{}'
 ```
 
 For local baseline runs, point `ENV_BASE_URL` at the local server:

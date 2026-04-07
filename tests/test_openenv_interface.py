@@ -67,12 +67,14 @@ def test_tasks_endpoint_lists_three_public_tasks() -> None:
     response = client.get("/tasks")
     assert response.status_code == 200
     payload = response.json()
-    assert [item["id"] for item in payload] == [
+    assert [item["id"] for item in payload["tasks"]] == [
         "high_latency_easy",
         "service_crash_medium",
         "bad_deployment_hard",
     ]
-    assert all(item["grader"] == "grade_episode" for item in payload)
+    assert all("name" in item for item in payload["tasks"])
+    assert all("description" in item for item in payload["tasks"])
+    assert all("num_scenarios" in item for item in payload["tasks"])
 
 
 def test_reset_accepts_task_id_alias() -> None:
@@ -88,11 +90,30 @@ def test_grader_endpoint_scores_task_trajectory() -> None:
         json={
             "task_id": "high_latency_easy",
             "seed": 5,
-            "actions": [{"action_type": "scale_up", "target": "api"}],
+            "trajectory": [{"action_type": "scale_up", "target": "api"}],
         },
     )
     assert response.status_code == 200
-    payload = response.json()
+    payload = response.json()["result"]
     assert payload["task_id"] == "high_latency_easy"
-    assert payload["resolved"] is True
-    assert 0.90 <= payload["terminal_grade"] < 1.0
+    assert 0.0 < payload["score"] < 1.0
+    assert payload["steps_taken"] == 1
+    assert "breakdown" in payload
+
+
+def test_info_endpoint_exposes_task_registry_and_spaces() -> None:
+    response = client.get("/info")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["name"] == "incident-response-rl"
+    assert len(payload["tasks"]) == 3
+    assert "properties" in payload["action_space"]
+    assert "properties" in payload["observation_space"]
+
+
+def test_baseline_endpoint_returns_one_result_per_task() -> None:
+    response = client.post("/baseline", json={})
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["results"]) == 3
+    assert 0.0 < payload["aggregate_score"] < 1.0

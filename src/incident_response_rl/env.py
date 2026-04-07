@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import threading
 from typing import Any
 
 from .graders import grade_episode, score_state
@@ -19,6 +20,9 @@ ACTION_MAP = {
     5: Action(action_type="escalate"),
 }
 
+_DISCOVERY_LOCK = threading.Lock()
+_DISCOVERY_INDEX = 0
+
 
 class IncidentResponseEnv:
     def __init__(self) -> None:
@@ -32,10 +36,24 @@ class IncidentResponseEnv:
         scenario_id: str | None = None,
         options: dict[str, Any] | None = None,
     ) -> tuple[Observation, dict[str, Any]]:
-        chosen_seed = 0 if seed is None else seed
-        self._rng = random.Random(chosen_seed)
         options = options or {}
-        scenario = choose_scenario(scenario_id or options.get("scenario_id"), self._rng)
+        selected_scenario_id = scenario_id or options.get("scenario_id")
+
+        if selected_scenario_id is not None:
+            chosen_seed = 0 if seed is None else seed
+            self._rng = random.Random(chosen_seed)
+            scenario = choose_scenario(selected_scenario_id, self._rng)
+        elif seed is not None:
+            self._rng = random.Random(seed)
+            scenario = choose_scenario(None, self._rng)
+        else:
+            global _DISCOVERY_INDEX
+            with _DISCOVERY_LOCK:
+                scenario_id_for_reset = SCENARIO_IDS[_DISCOVERY_INDEX % len(SCENARIO_IDS)]
+                _DISCOVERY_INDEX += 1
+            self._rng = random.Random()
+            scenario = choose_scenario(scenario_id_for_reset, self._rng)
+
         logs = list(scenario.initial_logs)
         alerts = list(scenario.initial_alerts)
         noisy = False

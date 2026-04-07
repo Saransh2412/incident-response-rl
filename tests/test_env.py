@@ -1,4 +1,5 @@
 from incident_response_rl.env import IncidentResponseEnv
+from incident_response_rl import env as env_module
 from incident_response_rl.models import Action
 from incident_response_rl.reward import grade_final_state
 
@@ -128,3 +129,23 @@ def test_seeded_variants_change_surface_signals() -> None:
     obs_b, _ = env_b.reset(seed=3, scenario_id="bad_deployment_hard")
     assert obs_a.logs != obs_b.logs
     assert obs_a.alerts != obs_b.alerts
+
+
+def test_unseeded_reset_cycles_public_tasks() -> None:
+    env_module._DISCOVERY_INDEX = 0
+    scenarios = []
+    for _ in range(3):
+        env = IncidentResponseEnv()
+        observation, info = env.reset()
+        scenarios.append(observation.scenario_id)
+        assert set(info["available_scenarios"]) == {
+            "high_latency_easy",
+            "service_crash_medium",
+            "bad_deployment_hard",
+        }
+
+    assert scenarios == [
+        "high_latency_easy",
+        "service_crash_medium",
+        "bad_deployment_hard",
+    ]

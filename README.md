@@ -57,7 +57,7 @@ Observation metadata includes:
 
 ## Tasks
 
-The environment exposes 3 public task families, each graded from `0.0` to `1.0`:
+The environment exposes 3 public task families with deterministic graders, and task scores are exported strictly inside `(0, 1)`:
 
 - `high_latency_easy`
   - Goal: diagnose API latency caused by capacity or burst-amplification issues.

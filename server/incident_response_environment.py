@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from openenv.core.env_server.interfaces import Environment
+from openenv.core.env_server.types import EnvironmentMetadata
 
 from incident_response_rl.env import IncidentResponseEnv
 from incident_response_rl.models import Action, IncidentState, Observation
@@ -12,6 +13,18 @@ class IncidentResponseEnvironment(Environment[Action, Observation, IncidentState
     SUPPORTS_CONCURRENT_SESSIONS = True
     _episodes: dict[str, IncidentResponseEnv] = {}
     _current_episode_id: str | None = None
+
+    def get_metadata(self) -> EnvironmentMetadata:
+        return EnvironmentMetadata(
+            name="IncidentResponseEnvironment",
+            description=(
+                "Incident response environment with 3 public tasks and deterministic graders: "
+                "high_latency_easy (capacity and burst amplification), "
+                "service_crash_medium (crash loop recovery), and "
+                "bad_deployment_hard (rollback and restart recovery)."
+            ),
+            version="1.0.0",
+        )
 
     def __init__(self) -> None:
         super().__init__()

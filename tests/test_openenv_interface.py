@@ -18,6 +18,14 @@ def test_openenv_health_and_schema() -> None:
     assert "observation" in payload
     assert "state" in payload
 
+    metadata = client.get("/metadata")
+    assert metadata.status_code == 200
+    metadata_payload = metadata.json()
+    description = metadata_payload["description"]
+    assert "high_latency_easy" in description
+    assert "service_crash_medium" in description
+    assert "bad_deployment_hard" in description
+
 
 def test_openenv_reset_and_step() -> None:
     reset = client.post("/reset", json={"scenario_id": "high_latency_easy", "seed": 5})
@@ -39,3 +47,17 @@ def test_openenv_state_endpoint() -> None:
     assert state.status_code == 200
     payload = state.json()
     assert payload["step_count"] == 0
+
+
+def test_unseeded_reset_cycles_three_public_tasks() -> None:
+    scenarios = []
+    for _ in range(3):
+        reset = client.post("/reset", json={})
+        assert reset.status_code == 200
+        scenarios.append(reset.json()["observation"]["scenario_id"])
+
+    assert scenarios == [
+        "high_latency_easy",
+        "service_crash_medium",
+        "bad_deployment_hard",
+    ]

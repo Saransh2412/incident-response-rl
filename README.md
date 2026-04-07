@@ -83,9 +83,11 @@ Dense reward shaping is deterministic but trajectory-sensitive:
 
 Deterministic task graders are separate from dense reward:
 
-- `1.0` full recovery
-- `0.5` partial recovery
-- `0.0` failure
+- scores are exported strictly inside `(0, 1)` for validator compatibility
+- perfect direct recoveries land in the high band, typically around `0.92`
+- perfect diagnosis-first recoveries can reach the ceiling at `0.99`
+- partial recovery paths land in the mid band, for example around `0.63`
+- clearly wrong or escalated failure paths stay near the floor, for example `0.01–0.21`
 
 Per-step partial task progress is exposed through `metadata.task_score`.
 
@@ -201,6 +203,18 @@ A representative evaluator-facing stdout transcript now looks like:
 [STEP] step=3 action=restart_service api reward=0.90 done=true error=null
 [END] success=true steps=6 score=1.000 rewards=1.10,0.25,1.00,0.25,0.50,0.90
 ```
+
+Representative terminal grades from the current continuous grader are:
+
+- `high_latency_easy` direct-fix path: `0.92`
+- `high_latency_easy` diagnosis-first path: `0.99`
+- `service_crash_medium` direct-fix path: `0.92`
+- `service_crash_medium` diagnosis-first path: `0.99`
+- `bad_deployment_hard` direct rollback-then-restart path: `0.92`
+- `bad_deployment_hard` diagnosis-first path: `0.99`
+- partial hard-task recovery after rollback only: about `0.63`
+- repeated wrong-action path: about `0.21`
+- escalation failure: about `0.16`
 
 Re-run `python inference.py` after deploying the latest environment to refresh the public baseline numbers. The report still includes:
 

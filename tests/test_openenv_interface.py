@@ -143,6 +143,29 @@ def test_task_registry_manifest_exists_and_matches_tasks() -> None:
     ]
 
 
+def test_root_level_task_and_grader_shims_exist() -> None:
+    from graders import (
+        incident_response_grade_bad_deployment,
+        incident_response_grade_high_latency,
+        incident_response_grade_service_crash,
+    )
+    from tasks import TASKS
+
+    assert [item["id"] for item in TASKS] == [
+        "high_latency_easy",
+        "service_crash_medium",
+        "bad_deployment_hard",
+    ]
+    assert [item["grader"] for item in TASKS] == [
+        "incident_response_grade_high_latency",
+        "incident_response_grade_service_crash",
+        "incident_response_grade_bad_deployment",
+    ]
+    assert callable(incident_response_grade_high_latency)
+    assert callable(incident_response_grade_service_crash)
+    assert callable(incident_response_grade_bad_deployment)
+
+
 def test_openenv_yaml_declares_explicit_graders() -> None:
     import yaml
     from pathlib import Path
@@ -157,6 +180,11 @@ def test_openenv_yaml_declares_explicit_graders() -> None:
         "incident_response_grade_high_latency",
         "incident_response_grade_service_crash",
         "incident_response_grade_bad_deployment",
+    ]
+    assert [item["implementation"] for item in payload["graders"]] == [
+        "graders:incident_response_grade_high_latency",
+        "graders:incident_response_grade_service_crash",
+        "graders:incident_response_grade_bad_deployment",
     ]
 
 

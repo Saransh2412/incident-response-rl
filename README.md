@@ -86,6 +86,7 @@ Task registry and explicit grader mapping:
 - `bad_deployment_hard` -> `incident_response_grade_bad_deployment`
 
 A static machine-readable copy of this registry is also available at the repo root in [`task_registry.json`](/D:/RL/task_registry.json).
+For compatibility with static validators, the same public task list is also mirrored at the repo root in [`tasks.py`](/D:/RL/tasks.py), and the named grader entrypoints are re-exported from [`graders.py`](/D:/RL/graders.py).
 
 Every grader-visible result includes 5 explicit grading components:
 

@@ -26,10 +26,10 @@ tasks:
 graders:
   - id: incident_response_grade_high_latency
     task_id: high_latency_easy
-    implementation: incident_response_rl.graders:incident_response_grade_high_latency
+    implementation: graders:incident_response_grade_high_latency
   - id: incident_response_grade_service_crash
     task_id: service_crash_medium
-    implementation: incident_response_rl.graders:incident_response_grade_service_crash
+    implementation: graders:incident_response_grade_service_crash
   - id: incident_response_grade_bad_deployment
     task_id: bad_deployment_hard
-    implementation: incident_response_rl.graders:incident_response_grade_bad_deployment
+    implementation: graders:incident_response_grade_bad_deployment

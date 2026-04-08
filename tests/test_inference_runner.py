@@ -6,6 +6,7 @@ from incident_response_rl.inference import (
     choose_runbook_action,
     create_llm_client,
     extract_successful_actions,
+    format_action_block,
     format_action_for_log,
     log_end,
     log_start,
@@ -144,6 +145,11 @@ def test_format_action_for_log_returns_plain_text() -> None:
     assert format_action_for_log(Action(action_type="analyze_logs")) == "analyze_logs"
 
 
+def test_format_action_block_returns_strict_envelope() -> None:
+    block = format_action_block(Action(action_type="scale_up", target="api"))
+    assert block == '[START]\n[STEP]\n{"action_type":"scale_up","target":"api"}\n[END]'
+
+
 def test_create_llm_client_uses_hf_router_env() -> None:
     with patch.dict(
         "os.environ",
@@ -187,6 +193,25 @@ def test_query_hf_router_uses_openai_client_shape() -> None:
     assert kwargs["temperature"] == 0
     assert kwargs["stream"] is False
     assert kwargs["extra_body"] == {"seed": 7}
+
+
+def test_query_hf_router_falls_back_on_client_error() -> None:
+    fake_client = Mock()
+    fake_client.chat.completions.create.side_effect = RuntimeError("router down")
+    observation = Observation(
+        logs=["ERROR api process exited with signal SIGKILL"],
+        metrics={"latency_ms": 210.0, "error_rate": 0.4, "cpu_pct": 30.0, "deployment_version": 20240401.0},
+        alerts=["CrashLoop(api)"],
+        system_status="critical",
+        step_count=0,
+        scenario_id="service_crash_medium",
+        difficulty="medium",
+        incident_family="service_crash",
+    )
+
+    result = query_hf_router(fake_client, observation)
+
+    assert result == '[START]\n[STEP]\n{"action_type":"restart_service","target":"api"}\n[END]'
 
 
 def test_structured_log_helpers_emit_expected_blocks(capsys) -> None:

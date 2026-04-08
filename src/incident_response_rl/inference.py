@@ -198,6 +198,10 @@ def format_action_for_log(action: Action) -> str:
     return action.action_type
 
 
+def format_action_block(action: Action) -> str:
+    return "[START]\n[STEP]\n" + action.model_dump_json(exclude={"metadata"}) + "\n[END]"
+
+
 def log_start(task: str, env: str, model: str) -> None:
     print(f"[START] task={task} env={env} model={model}", flush=True)
 
@@ -230,16 +234,23 @@ def create_llm_client() -> OpenAI:
 
 def query_hf_router(client: OpenAI, observation: Observation) -> str:
     model_name = os.environ.get("MODEL_NAME", DEFAULT_MODEL_NAME)
-    completion = client.chat.completions.create(
-        model=model_name,
-        messages=[{"role": "user", "content": build_prompt(observation)}],
-        temperature=0,
-        max_tokens=200,
-        stream=False,
-        extra_body={"seed": 7},
-    )
-    text = completion.choices[0].message.content or ""
-    return text.strip()
+    try:
+        completion = client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": build_prompt(observation)}],
+            temperature=0,
+            max_tokens=200,
+            stream=False,
+            extra_body={"seed": 7},
+        )
+        text = completion.choices[0].message.content or ""
+        if text.strip():
+            return text.strip()
+    except Exception:
+        pass
+
+    fallback = choose_runbook_action(observation) or choose_fallback_action(observation)
+    return format_action_block(fallback)
 
 
 def reset_remote_env(client: httpx.Client, env_base_url: str, scenario_id: str, seed: int) -> tuple[str, Observation]:

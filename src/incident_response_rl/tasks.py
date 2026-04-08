@@ -29,6 +29,14 @@ class TasksResponse(BaseModel):
     tasks: list[TaskInfo]
 
 
+class GradeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: str
+    trajectory: list[dict] = Field(default_factory=list)
+    seed: int | None = None
+
+
 class EnvironmentInfo(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

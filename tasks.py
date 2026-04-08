@@ -13,4 +13,6 @@ TASKS = [
     for task in PUBLIC_TASKS
 ]
 
-__all__ = ["CANONICAL_TASK_SEEDS", "PUBLIC_TASKS", "TASKS", "get_public_tasks"]
+TASKS_WRAPPED = {"tasks": TASKS}
+
+__all__ = ["CANONICAL_TASK_SEEDS", "PUBLIC_TASKS", "TASKS", "TASKS_WRAPPED", "get_public_tasks"]

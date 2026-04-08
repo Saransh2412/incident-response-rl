@@ -67,15 +67,26 @@ def test_tasks_endpoint_lists_three_public_tasks() -> None:
     response = client.get("/tasks")
     assert response.status_code == 200
     payload = response.json()
+    assert [item["id"] for item in payload] == [
+        "high_latency_easy",
+        "service_crash_medium",
+        "bad_deployment_hard",
+    ]
+    assert all("name" in item for item in payload)
+    assert all("description" in item for item in payload)
+    assert all("num_scenarios" in item for item in payload)
+    assert all("grader" in item for item in payload)
+
+
+def test_tasks_wrapped_endpoint_lists_three_public_tasks() -> None:
+    response = client.get("/tasks_wrapped")
+    assert response.status_code == 200
+    payload = response.json()
     assert [item["id"] for item in payload["tasks"]] == [
         "high_latency_easy",
         "service_crash_medium",
         "bad_deployment_hard",
     ]
-    assert all("name" in item for item in payload["tasks"])
-    assert all("description" in item for item in payload["tasks"])
-    assert all("num_scenarios" in item for item in payload["tasks"])
-    assert all("grader" in item for item in payload["tasks"])
 
 
 def test_reset_accepts_task_id_alias() -> None:
@@ -99,6 +110,28 @@ def test_grader_endpoint_scores_task_trajectory() -> None:
     assert payload["task_id"] == "high_latency_easy"
     assert 0.0 < payload["score"] < 1.0
     assert payload["steps_taken"] == 1
+    assert set(payload["breakdown"]) == {
+        "diagnosis",
+        "sequence",
+        "effectiveness",
+        "efficiency",
+        "safety",
+    }
+
+
+def test_grade_endpoint_scores_task_trajectory() -> None:
+    response = client.post(
+        "/grade",
+        json={
+            "task_id": "high_latency_easy",
+            "seed": 5,
+            "trajectory": [{"action_type": "scale_up", "target": "api"}],
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["task_id"] == "high_latency_easy"
+    assert 0.0 < payload["score"] < 1.0
     assert set(payload["breakdown"]) == {
         "diagnosis",
         "sequence",

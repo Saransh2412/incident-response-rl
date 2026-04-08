@@ -1,4 +1,7 @@
 from incident_response_rl.graders import (
+    GRADERS,
+    grade,
+    grade_detailed,
     grade_episode,
     grading_components,
     incident_response_grade_bad_deployment,
@@ -8,6 +11,9 @@ from incident_response_rl.graders import (
 )
 
 __all__ = [
+    "GRADERS",
+    "grade",
+    "grade_detailed",
     "grade_episode",
     "grading_components",
     "incident_response_grade_bad_deployment",

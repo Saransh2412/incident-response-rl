@@ -74,8 +74,10 @@ When `scenario_id` is omitted, the environment samples from these task families 
 The service also exposes validator-facing task and grading surfaces:
 
 - `GET /info` exposes environment metadata, task registry, max steps, and JSON schemas
-- `GET /tasks` returns the 3 public tasks in a machine-readable wrapper
+- `GET /tasks` returns the 3 public tasks as a bare machine-readable list for validator compatibility
+- `GET /tasks_wrapped` returns the same tasks under `{"tasks": [...]}` for convenience
 - `POST /grader` grades a proposed trajectory for a given `task_id`
+- `POST /grade` is a simpler compatibility alias for task grading
 - `POST /baseline` runs the built-in deterministic heuristic over one or all public tasks
 - `POST /reset` accepts either `scenario_id` or `task_id`
 

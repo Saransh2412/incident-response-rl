@@ -5,7 +5,14 @@ from pydantic import Field
 from openenv.core.env_server.http_server import create_app
 
 from incident_response_rl.env import IncidentResponseEnv
-from incident_response_rl.graders import COMPONENT_WEIGHTS, grade_episode, grading_components, score_state
+from incident_response_rl.graders import (
+    COMPONENT_WEIGHTS,
+    grade,
+    grade_detailed,
+    grade_episode,
+    grading_components,
+    score_state,
+)
 from incident_response_rl.models import Action, Observation
 from incident_response_rl.inference import choose_fallback_action, choose_runbook_action
 from incident_response_rl.tasks import (
@@ -13,6 +20,7 @@ from incident_response_rl.tasks import (
     BaselineResponse,
     CANONICAL_TASK_SEEDS,
     EnvironmentInfo,
+    GradeRequest,
     GraderRequest,
     GraderResponse,
     GraderResult,
@@ -115,14 +123,41 @@ def get_info() -> EnvironmentInfo:
     )
 
 
-@app.get("/tasks", response_model=TasksResponse, tags=["Environment Info"])
-def list_tasks() -> TasksResponse:
+@app.get("/tasks", response_model=list[TaskInfo], tags=["Environment Info"])
+def list_tasks() -> list[TaskInfo]:
+    return get_public_tasks()
+
+
+@app.get("/tasks_wrapped", response_model=TasksResponse, tags=["Environment Info"])
+def list_tasks_wrapped() -> TasksResponse:
     return TasksResponse(tasks=get_public_tasks())
 
 
 @app.post("/grader", response_model=GraderResponse, tags=["Environment Control"])
 def grade_task(request: GraderRequest = Body(...)) -> GraderResponse:
     return GraderResponse(result=_grade_task_result(request.task_id, request.seed, request.trajectory))
+
+
+@app.post("/grade", tags=["Evaluation"])
+def grade_endpoint(
+    task_id: str | None = None,
+    request: GradeRequest | None = Body(default=None),
+):
+    resolved_task_id = request.task_id if request is not None else task_id
+    if not resolved_task_id:
+        resolved_task_id = get_public_tasks()[0].id
+    trajectory = request.trajectory if request is not None else []
+    seed = request.seed if request is not None else None
+    result = _grade_task_result(resolved_task_id, seed, trajectory)
+    return {
+        "task_id": result.task_id,
+        "score": result.score,
+        "breakdown": result.breakdown,
+        "feedback": result.feedback,
+        "steps_taken": result.steps_taken,
+        "hints_used": result.hints_used,
+        "max_score": result.max_score,
+    }
 
 
 @app.post("/baseline", response_model=BaselineResponse, tags=["Environment Control"])

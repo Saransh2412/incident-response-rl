@@ -12,6 +12,12 @@ COMPONENT_WEIGHTS = {
     "safety": 0.15,
 }
 
+GRADERS = {
+    "high_latency_easy": "incident_response_grade_high_latency",
+    "service_crash_medium": "incident_response_grade_service_crash",
+    "bad_deployment_hard": "incident_response_grade_bad_deployment",
+}
+
 
 def _open_interval(score: float) -> float:
     if score <= 0.0:
@@ -160,3 +166,23 @@ def incident_response_grade_service_crash(state: EnvironmentState) -> float:
 
 def incident_response_grade_bad_deployment(state: EnvironmentState) -> float:
     return grade_episode(state)
+
+
+def grade(task_id: str, state: EnvironmentState) -> float:
+    if task_id == "high_latency_easy":
+        return incident_response_grade_high_latency(state)
+    if task_id == "service_crash_medium":
+        return incident_response_grade_service_crash(state)
+    if task_id == "bad_deployment_hard":
+        return incident_response_grade_bad_deployment(state)
+    valid = ", ".join(GRADERS)
+    raise ValueError(f"Unknown task_id '{task_id}'. Valid tasks: {valid}")
+
+
+def grade_detailed(task_id: str, state: EnvironmentState) -> dict[str, float | dict[str, float]]:
+    components = grading_components(state)
+    return {
+        "task_id": task_id,
+        "score": grade(task_id, state),
+        "breakdown": components,
+    }

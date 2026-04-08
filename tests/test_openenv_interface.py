@@ -143,6 +143,23 @@ def test_task_registry_manifest_exists_and_matches_tasks() -> None:
     ]
 
 
+def test_openenv_yaml_declares_explicit_graders() -> None:
+    import yaml
+    from pathlib import Path
+
+    payload = yaml.safe_load(Path("openenv.yaml").read_text(encoding="utf-8"))
+    assert [item["grader"] for item in payload["tasks"]] == [
+        "incident_response_grade_high_latency",
+        "incident_response_grade_service_crash",
+        "incident_response_grade_bad_deployment",
+    ]
+    assert [item["id"] for item in payload["graders"]] == [
+        "incident_response_grade_high_latency",
+        "incident_response_grade_service_crash",
+        "incident_response_grade_bad_deployment",
+    ]
+
+
 def test_baseline_endpoint_returns_one_result_per_task() -> None:
     response = client.post("/baseline", json={})
     assert response.status_code == 200

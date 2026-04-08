@@ -8,18 +8,28 @@ tasks:
   - id: high_latency_easy
     name: API Latency Recovery
     difficulty: easy
-    grader: deterministic
+    grader: incident_response_grade_high_latency
     description: Restore API latency caused by capacity pressure or burst amplification.
     num_scenarios: 3
   - id: service_crash_medium
     name: Crash Loop Recovery
     difficulty: medium
-    grader: deterministic
+    grader: incident_response_grade_service_crash
     description: Recover a crash-looping API service while handling diagnosis-first variants.
     num_scenarios: 3
   - id: bad_deployment_hard
     name: Bad Deployment Remediation
     difficulty: hard
-    grader: deterministic
+    grader: incident_response_grade_bad_deployment
     description: Undo a bad deployment and fully restore service health through the required sequence.
     num_scenarios: 3
+graders:
+  - id: incident_response_grade_high_latency
+    task_id: high_latency_easy
+    implementation: incident_response_rl.graders:incident_response_grade_high_latency
+  - id: incident_response_grade_service_crash
+    task_id: service_crash_medium
+    implementation: incident_response_rl.graders:incident_response_grade_service_crash
+  - id: incident_response_grade_bad_deployment
+    task_id: bad_deployment_hard
+    implementation: incident_response_rl.graders:incident_response_grade_bad_deployment

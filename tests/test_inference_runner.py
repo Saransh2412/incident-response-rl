@@ -1,3 +1,4 @@
+import os
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -167,6 +168,21 @@ def test_create_llm_client_uses_hf_router_env() -> None:
     )
 
 
+def test_create_llm_client_requires_token() -> None:
+    with patch.dict("os.environ", {}, clear=False):
+        token_backup = os.environ.pop("HF_TOKEN", None)
+        try:
+            try:
+                create_llm_client()
+            except RuntimeError as exc:
+                assert "HF_TOKEN" in str(exc)
+            else:
+                raise AssertionError("create_llm_client should require HF_TOKEN")
+        finally:
+            if token_backup is not None:
+                os.environ["HF_TOKEN"] = token_backup
+
+
 def test_query_hf_router_uses_openai_client_shape() -> None:
     fake_client = Mock()
     fake_client.chat.completions.create.return_value = SimpleNamespace(
@@ -212,6 +228,8 @@ def test_query_hf_router_falls_back_on_client_error() -> None:
     result = query_hf_router(fake_client, observation)
 
     assert result == '[START]\n[STEP]\n{"action_type":"restart_service","target":"api"}\n[END]'
+
+
 
 
 def test_structured_log_helpers_emit_expected_blocks(capsys) -> None:

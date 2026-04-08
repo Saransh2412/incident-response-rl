@@ -45,6 +45,11 @@ REMEDIAL_ACTIONS = {
 }
 RUN_NAME = "incident-response-rl"
 SUCCESS_SCORE_THRESHOLD = 0.95
+TASK_DIFFICULTY = {
+    "high_latency_easy": "easy",
+    "service_crash_medium": "medium",
+    "bad_deployment_hard": "hard",
+}
 
 
 def build_prompt(observation: Observation) -> str:
@@ -283,6 +288,18 @@ def step_remote_env(client: httpx.Client, env_base_url: str, action: Action) -> 
     return observation
 
 
+def failure_result(scenario_id: str, steps_taken: int = 0) -> BaselineEpisodeResult:
+    return BaselineEpisodeResult(
+        scenario_id=scenario_id,
+        difficulty=TASK_DIFFICULTY.get(scenario_id, "hard"),
+        score=0.01,
+        terminal_grade=0.01,
+        steps_taken=steps_taken,
+        total_reward=0.0,
+        successful_actions=[],
+    )
+
+
 def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> BaselineRunReport:
     scenarios = scenarios or list(DEFAULT_SCENARIOS)
     task_results: list[BaselineEpisodeResult] = []
@@ -296,7 +313,12 @@ def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> Basel
             rewards_history: list[float] = []
             steps_taken = 0
             log_start(task=scenario_id, env=RUN_NAME, model=model_name)
-            episode_id, observation = reset_remote_env(client, env_base_url, scenario_id, seed=index + 1)
+            try:
+                episode_id, observation = reset_remote_env(client, env_base_url, scenario_id, seed=index + 1)
+            except Exception:
+                log_end(success=False, steps=0, score=0.01, rewards=[])
+                task_results.append(failure_result(scenario_id))
+                continue
             while not observation.done:
                 raw_text = query_hf_router(llm_client, observation)
                 previous_score = observation.task_score
@@ -305,12 +327,24 @@ def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> Basel
                 error: str | None = None
                 try:
                     next_observation = step_remote_env(client, env_base_url, action)
-                except httpx.HTTPStatusError:
+                except Exception:
                     fallback_action = choose_fallback_action(observation)
                     fallback_action.metadata["episode_id"] = episode_id
                     action = fallback_action
                     error = "fallback_action"
-                    next_observation = step_remote_env(client, env_base_url, fallback_action)
+                    try:
+                        next_observation = step_remote_env(client, env_base_url, fallback_action)
+                    except Exception:
+                        log_step(
+                            step=max(1, observation.step_count + 1),
+                            action=fallback_action,
+                            reward=0.0,
+                            done=True,
+                            error="step_failed",
+                        )
+                        log_end(success=False, steps=steps_taken, score=0.01, rewards=rewards_history)
+                        task_results.append(failure_result(scenario_id, steps_taken=steps_taken))
+                        break
                 reported_actions = extract_successful_actions(next_observation)
                 if reported_actions:
                     successful_actions = list(dict.fromkeys(reported_actions))
@@ -332,27 +366,28 @@ def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> Basel
                     error=error,
                 )
                 observation = next_observation
-
-            final_score = float(observation.terminal_grade or observation.task_score)
-            log_end(
-                success=final_score >= SUCCESS_SCORE_THRESHOLD,
-                steps=steps_taken,
-                score=final_score,
-                rewards=[round(reward, 3) for reward in rewards_history],
-            )
-            task_results.append(
-                BaselineEpisodeResult(
-                    scenario_id=scenario_id,
-                    difficulty=observation.difficulty,
-                    score=float(observation.task_score),
-                    terminal_grade=float(observation.terminal_grade or 0.0),
-                    steps_taken=observation.step_count,
-                    total_reward=round(total_reward, 3),
-                    successful_actions=successful_actions,
+            else:
+                final_score = float(observation.terminal_grade or observation.task_score)
+                log_end(
+                    success=final_score >= SUCCESS_SCORE_THRESHOLD,
+                    steps=steps_taken,
+                    score=final_score,
+                    rewards=[round(reward, 3) for reward in rewards_history],
                 )
-            )
+                task_results.append(
+                    BaselineEpisodeResult(
+                        scenario_id=scenario_id,
+                        difficulty=observation.difficulty,
+                        score=float(observation.task_score),
+                        terminal_grade=float(observation.terminal_grade or 0.0),
+                        steps_taken=observation.step_count,
+                        total_reward=round(total_reward, 3),
+                        successful_actions=successful_actions,
+                    )
+                )
+                continue
 
-    average_score = round(sum(item.score for item in task_results) / len(task_results), 3)
+    average_score = round(sum(item.score for item in task_results) / max(1, len(task_results)), 3)
     report = BaselineRunReport(
         model_name=model_name,
         router_base_url=os.environ.get("API_BASE_URL", DEFAULT_API_BASE_URL),
@@ -368,10 +403,25 @@ def main() -> None:
     parser.add_argument("--output", default="artifacts/baseline_scores.json")
     args = parser.parse_args()
 
-    report = run_baseline(args.env_base_url)
+    try:
+        report = run_baseline(args.env_base_url)
+    except Exception:
+        report = BaselineRunReport(
+            model_name=os.environ.get("MODEL_NAME", DEFAULT_MODEL_NAME),
+            router_base_url=os.environ.get("API_BASE_URL", DEFAULT_API_BASE_URL),
+            average_score=0.01,
+            task_scores=[failure_result(scenario_id) for scenario_id in DEFAULT_SCENARIOS],
+        )
+        for scenario_id in DEFAULT_SCENARIOS:
+            log_start(task=scenario_id, env=RUN_NAME, model=report.model_name)
+            log_end(success=False, steps=0, score=0.01, rewards=[])
+
     output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(report.model_dump_json(indent=2), encoding="utf-8")
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(report.model_dump_json(indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

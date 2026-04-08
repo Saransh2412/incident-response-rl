@@ -1,0 +1,31 @@
+{
+  "tasks": [
+    {
+      "id": "high_latency_easy",
+      "name": "API Latency Recovery",
+      "description": "Restore API latency caused by capacity pressure or burst amplification.",
+      "difficulty": "easy",
+      "grader": "incident_response_grade_high_latency",
+      "num_scenarios": 3,
+      "canonical_seed": 5
+    },
+    {
+      "id": "service_crash_medium",
+      "name": "Crash Loop Recovery",
+      "description": "Recover a crash-looping API service while handling diagnosis-first variants.",
+      "difficulty": "medium",
+      "grader": "incident_response_grade_service_crash",
+      "num_scenarios": 3,
+      "canonical_seed": 3
+    },
+    {
+      "id": "bad_deployment_hard",
+      "name": "Bad Deployment Remediation",
+      "description": "Undo a bad deployment and fully restore service health through the required sequence.",
+      "difficulty": "hard",
+      "grader": "incident_response_grade_bad_deployment",
+      "num_scenarios": 3,
+      "canonical_seed": 1
+    }
+  ]
+}

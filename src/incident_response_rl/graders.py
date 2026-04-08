@@ -148,3 +148,15 @@ def score_state(state: EnvironmentState) -> float:
 
 def grade_episode(state: EnvironmentState) -> float:
     return _open_interval(_raw_terminal_grade(state))
+
+
+def incident_response_grade_high_latency(state: EnvironmentState) -> float:
+    return grade_episode(state)
+
+
+def incident_response_grade_service_crash(state: EnvironmentState) -> float:
+    return grade_episode(state)
+
+
+def incident_response_grade_bad_deployment(state: EnvironmentState) -> float:
+    return grade_episode(state)

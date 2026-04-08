@@ -1,5 +1,12 @@
 from incident_response_rl.env import IncidentResponseEnv
-from incident_response_rl.graders import grade_episode, grading_components, score_state
+from incident_response_rl.graders import (
+    grade_episode,
+    grading_components,
+    incident_response_grade_bad_deployment,
+    incident_response_grade_high_latency,
+    incident_response_grade_service_crash,
+    score_state,
+)
 from incident_response_rl.models import Action
 
 
@@ -146,3 +153,20 @@ def test_repeated_wrong_actions_lower_safety_and_efficiency() -> None:
     components = grading_components(state)
     assert components["safety"] < 0.6
     assert components["efficiency"] < 0.8
+
+
+def test_named_graders_exist_and_return_open_interval_scores() -> None:
+    high_latency = _run_actions("high_latency_easy", 5, [Action(action_type="scale_up", target="api")])
+    service_crash = _run_actions("service_crash_medium", 3, [Action(action_type="restart_service", target="api")])
+    bad_deployment = _run_actions(
+        "bad_deployment_hard",
+        1,
+        [
+            Action(action_type="analyze_logs"),
+            Action(action_type="rollback_deployment", target="api"),
+            Action(action_type="restart_service", target="api"),
+        ],
+    )
+    assert 0.0 < incident_response_grade_high_latency(high_latency) < 1.0
+    assert 0.0 < incident_response_grade_service_crash(service_crash) < 1.0
+    assert 0.0 < incident_response_grade_bad_deployment(bad_deployment) < 1.0

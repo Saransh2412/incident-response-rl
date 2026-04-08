@@ -20,6 +20,7 @@ class TaskInfo(BaseModel):
     description: str
     difficulty: Difficulty
     num_scenarios: int
+    grader: str
 
 
 class TasksResponse(BaseModel):
@@ -88,6 +89,7 @@ PUBLIC_TASKS = [
         description="Restore API latency caused by capacity pressure or burst amplification.",
         difficulty="easy",
         num_scenarios=3,
+        grader="incident_response_grade_high_latency",
     ),
     TaskInfo(
         id="service_crash_medium",
@@ -95,6 +97,7 @@ PUBLIC_TASKS = [
         description="Recover a crash-looping API service while handling diagnosis-first variants.",
         difficulty="medium",
         num_scenarios=3,
+        grader="incident_response_grade_service_crash",
     ),
     TaskInfo(
         id="bad_deployment_hard",
@@ -102,6 +105,7 @@ PUBLIC_TASKS = [
         description="Undo a bad deployment and fully restore service health through the required sequence.",
         difficulty="hard",
         num_scenarios=3,
+        grader="incident_response_grade_bad_deployment",
     ),
 ]
 

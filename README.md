@@ -79,6 +79,14 @@ The service also exposes validator-facing task and grading surfaces:
 - `POST /baseline` runs the built-in deterministic heuristic over one or all public tasks
 - `POST /reset` accepts either `scenario_id` or `task_id`
 
+Task registry and explicit grader mapping:
+
+- `high_latency_easy` -> `incident_response_grade_high_latency`
+- `service_crash_medium` -> `incident_response_grade_service_crash`
+- `bad_deployment_hard` -> `incident_response_grade_bad_deployment`
+
+A static machine-readable copy of this registry is also available at the repo root in [`task_registry.json`](/D:/RL/task_registry.json).
+
 Every grader-visible result includes 5 explicit grading components:
 
 - `diagnosis`

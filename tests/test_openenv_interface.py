@@ -75,6 +75,7 @@ def test_tasks_endpoint_lists_three_public_tasks() -> None:
     assert all("name" in item for item in payload["tasks"])
     assert all("description" in item for item in payload["tasks"])
     assert all("num_scenarios" in item for item in payload["tasks"])
+    assert all("grader" in item for item in payload["tasks"])
 
 
 def test_reset_accepts_task_id_alias() -> None:
@@ -113,6 +114,7 @@ def test_info_endpoint_exposes_task_registry_and_spaces() -> None:
     payload = response.json()
     assert payload["name"] == "incident-response-rl"
     assert len(payload["tasks"]) == 3
+    assert all("grader" in task for task in payload["tasks"])
     assert "properties" in payload["action_space"]
     assert "properties" in payload["observation_space"]
     assert set(payload["grading_components"]) == {
@@ -122,6 +124,23 @@ def test_info_endpoint_exposes_task_registry_and_spaces() -> None:
         "efficiency",
         "safety",
     }
+
+
+def test_task_registry_manifest_exists_and_matches_tasks() -> None:
+    import json
+    from pathlib import Path
+
+    payload = json.loads(Path("task_registry.json").read_text(encoding="utf-8"))
+    assert [item["id"] for item in payload["tasks"]] == [
+        "high_latency_easy",
+        "service_crash_medium",
+        "bad_deployment_hard",
+    ]
+    assert [item["grader"] for item in payload["tasks"]] == [
+        "incident_response_grade_high_latency",
+        "incident_response_grade_service_crash",
+        "incident_response_grade_bad_deployment",
+    ]
 
 
 def test_baseline_endpoint_returns_one_result_per_task() -> None:

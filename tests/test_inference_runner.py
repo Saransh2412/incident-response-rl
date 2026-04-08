@@ -190,7 +190,7 @@ def test_query_hf_router_uses_openai_client_shape() -> None:
 
 
 def test_structured_log_helpers_emit_expected_blocks(capsys) -> None:
-    log_start(task="all_tasks", env="incident-response-rl", model="openai/gpt-oss-20b")
+    log_start(task="high_latency_easy", env="incident-response-rl", model="openai/gpt-oss-20b")
     log_step(
         step=1,
         action=Action(action_type="scale_up", target="api"),
@@ -207,7 +207,7 @@ def test_structured_log_helpers_emit_expected_blocks(capsys) -> None:
 
     stdout = capsys.readouterr().out.strip().splitlines()
     assert stdout == [
-        "[START] task=all_tasks env=incident-response-rl model=openai/gpt-oss-20b",
+        "[START] task=high_latency_easy env=incident-response-rl model=openai/gpt-oss-20b",
         "[STEP] step=1 action=scale_up api reward=1.30 done=true error=null",
         "[END] success=true steps=1 score=1.000 rewards=1.30",
     ]
@@ -342,11 +342,19 @@ def test_run_baseline_stdout_matches_sample_style(capsys) -> None:
         run_baseline("http://127.0.0.1:8000")
 
     stdout = capsys.readouterr().out.strip().splitlines()
-    assert stdout[0] == "[START] task=all_tasks env=incident-response-rl model=openai/gpt-oss-20b"
-    assert stdout[-1].startswith("[END] success=true steps=3 score=")
-    assert stdout[-1].endswith("rewards=1.30,1.30,1.30")
+    start_lines = [line for line in stdout if line.startswith("[START] ")]
+    end_lines = [line for line in stdout if line.startswith("[END] ")]
     step_lines = [line for line in stdout if line.startswith("[STEP] ")]
+    assert start_lines == [
+        "[START] task=high_latency_easy env=incident-response-rl model=openai/gpt-oss-20b",
+        "[START] task=service_crash_medium env=incident-response-rl model=openai/gpt-oss-20b",
+        "[START] task=bad_deployment_hard env=incident-response-rl model=openai/gpt-oss-20b",
+    ]
+    assert len(end_lines) == 3
     assert len(step_lines) == 3
+    for line in end_lines:
+        assert line.startswith("[END] success=true steps=1 score=")
+        assert line.endswith("rewards=1.30")
     for line in step_lines:
         assert " step=1 " in line
         assert " reward=1.30 " in line

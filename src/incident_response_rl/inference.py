@@ -277,14 +277,14 @@ def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> Basel
     task_results: list[BaselineEpisodeResult] = []
     llm_client = create_llm_client()
     model_name = os.environ.get("MODEL_NAME", DEFAULT_MODEL_NAME)
-    log_start(task="all_tasks", env=RUN_NAME, model=model_name)
-    rewards_history: list[float] = []
-    steps_taken = 0
 
     with httpx.Client(timeout=30.0) as client:
         for index, scenario_id in enumerate(scenarios):
             total_reward = 0.0
             successful_actions: list[str] = []
+            rewards_history: list[float] = []
+            steps_taken = 0
+            log_start(task=scenario_id, env=RUN_NAME, model=model_name)
             episode_id, observation = reset_remote_env(client, env_base_url, scenario_id, seed=index + 1)
             while not observation.done:
                 raw_text = query_hf_router(llm_client, observation)
@@ -322,6 +322,13 @@ def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> Basel
                 )
                 observation = next_observation
 
+            final_score = float(observation.terminal_grade or observation.task_score)
+            log_end(
+                success=final_score >= SUCCESS_SCORE_THRESHOLD,
+                steps=steps_taken,
+                score=final_score,
+                rewards=[round(reward, 3) for reward in rewards_history],
+            )
             task_results.append(
                 BaselineEpisodeResult(
                     scenario_id=scenario_id,
@@ -340,12 +347,6 @@ def run_baseline(env_base_url: str, scenarios: list[str] | None = None) -> Basel
         router_base_url=os.environ.get("API_BASE_URL", DEFAULT_API_BASE_URL),
         average_score=average_score,
         task_scores=task_results,
-    )
-    log_end(
-        success=average_score >= SUCCESS_SCORE_THRESHOLD,
-        steps=steps_taken,
-        score=average_score,
-        rewards=[round(reward, 3) for reward in rewards_history],
     )
     return report
 
